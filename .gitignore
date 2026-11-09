@@ -482,3 +482,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Örnek sınav kâğıtları: veritabanındaki öğrencilerin ad ve numaralarını taşır, depoya girmemeli.
+SampleOptics/

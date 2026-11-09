@@ -19,6 +19,11 @@ public partial class ExamManagementViewModel : ObservableObject
 
     [ObservableProperty] private ObservableCollection<ExamListItemDto> _exams = new();
 
+    // Arama: sınav adı, ders adı veya sınav türüne göre anlık filtre
+    [ObservableProperty] private string _searchText = string.Empty;
+    [ObservableProperty] private ObservableCollection<ExamListItemDto> _filteredExams = new();
+    [ObservableProperty] private bool _hasNoSearchResults;
+
     [ObservableProperty] private bool _isEditDialogOpen;
     [ObservableProperty] private int _editingExamId;
     [ObservableProperty] private string _editTitle = string.Empty;
@@ -77,6 +82,35 @@ public partial class ExamManagementViewModel : ObservableObject
             _ = SearchPoolAsync();
     }
 
+
+    partial void OnSearchTextChanged(string value) => ApplyFilter();
+
+    private static readonly System.Globalization.CompareInfo TurkishCompare =
+        System.Globalization.CultureInfo.GetCultureInfo("tr-TR").CompareInfo;
+
+    private static bool Matches(string? source, string query) =>
+        !string.IsNullOrEmpty(source) &&
+        TurkishCompare.IndexOf(source, query, System.Globalization.CompareOptions.IgnoreCase) >= 0;
+
+    private static string ExamTypeLabel(ExamType type) => type switch
+    {
+        ExamType.Midterm => "Vize",
+        ExamType.MakeUp => "Bütünleme",
+        _ => type.ToString()
+    };
+
+    /// <summary>Sınav listesini arama metnine göre süzer.</summary>
+    private void ApplyFilter()
+    {
+        var query = SearchText?.Trim() ?? string.Empty;
+        var list = query.Length == 0
+            ? Exams.ToList()
+            : Exams.Where(e => Matches(e.Title, query) || Matches(e.CourseName, query) || Matches(ExamTypeLabel(e.ExamType), query)).ToList();
+
+        FilteredExams = new ObservableCollection<ExamListItemDto>(list);
+        HasNoSearchResults = Exams.Count > 0 && list.Count == 0;
+    }
+
     public async Task LoadAsync()
     {
         IsLoading = true;
@@ -87,6 +121,7 @@ public partial class ExamManagementViewModel : ObservableObject
         {
             var list = await _examService.GetAllExamsAsync();
             Exams = new ObservableCollection<ExamListItemDto>(list);
+            ApplyFilter();
         }
         catch (Exception ex)
         {
@@ -405,6 +440,7 @@ public partial class ExamManagementViewModel : ObservableObject
         {
             await _examService.DeleteExamAsync(item.Id);
             Exams.Remove(item);
+            ApplyFilter();
             SuccessMessage = "Sınav silindi.";
         }
         catch (Exception ex)

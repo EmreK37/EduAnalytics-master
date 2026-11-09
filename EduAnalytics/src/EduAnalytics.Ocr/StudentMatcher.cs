@@ -12,6 +12,9 @@ public enum MatchKind
     /// <summary>Numara 1-2 karakter hatayla eşleşti (OCR düzeltmesi).</summary>
     FuzzyNumber,
 
+    /// <summary>Numaranın bazı haneleri okunamadı ('?'); okunan haneler tek bir öğrenciyle örtüştü.</summary>
+    PartialNumber,
+
     /// <summary>Numara okunamadı; ad-soyad benzerliğiyle eşleşti — mutlaka kontrol edilmeli.</summary>
     NameOnly,
 
@@ -26,6 +29,66 @@ public enum MatchKind
 /// </summary>
 public static class StudentMatcher
 {
+    /// <summary>En olası öğrencinin bir sonrakinden en az bu kat daha olası olması gerekir.</summary>
+    private const double MinLikelihoodRatio = 40;
+
+    /// <summary>
+    /// El yazısı numara kutularından gelen hane olasılıklarıyla eşleştirir. Her kayıtlı numaranın tamamı
+    /// için olasılık hesaplanır (Σ log p(hane)); tek tek hanelerin en olası rakamına bakmaktan daha güvenlidir:
+    /// belirsiz bir hane (ör. 1/7) diğer hanelerin desteğiyle doğru öğrenciye çözülür.
+    /// Kazanan yeterince belirgin değilse eşleştirme yapılmaz; okunan numara ve ad ile klasik yönteme düşülür.
+    /// </summary>
+    public static (int? StudentId, MatchKind Kind) MatchHandwritten(
+        IReadOnlyList<float[]?> digitProbabilities, string rawName, IReadOnlyList<StudentCandidate> candidates)
+    {
+        var written = digitProbabilities.Count(p => p != null);
+        var rawNumber = new string(digitProbabilities
+            .Select(p => p == null ? '?' : (char)('0' + Array.IndexOf(p, p.Max()))).ToArray()).Trim('?');
+
+        if (written >= 6)
+        {
+            var scored = candidates
+                .Select(c => (Candidate: c, Score: LogLikelihood(digitProbabilities, NormalizeNumber(c.Number))))
+                .Where(x => x.Score.HasValue)
+                .OrderByDescending(x => x.Score!.Value)
+                .ToList();
+
+            if (scored.Count > 0)
+            {
+                var best = scored[0];
+                var bestNumber = NormalizeNumber(best.Candidate.Number);
+                var disagreements = digitProbabilities
+                    .Select((p, i) => p != null && i < bestNumber.Length && Array.IndexOf(p, p.Max()) != bestNumber[i] - '0')
+                    .Count(x => x);
+                var ratio = scored.Count > 1 ? Math.Exp(best.Score!.Value - scored[1].Score!.Value) : double.PositiveInfinity;
+
+                if (disagreements == 0 && written == bestNumber.Length && ratio >= MinLikelihoodRatio)
+                    return (best.Candidate.Id, MatchKind.ExactNumber);
+                if (disagreements <= 2 && ratio >= MinLikelihoodRatio)
+                    return (best.Candidate.Id, MatchKind.FuzzyNumber);
+            }
+        }
+
+        // Olasılıklar belirgin bir öğrenci göstermedi: okunan dizi ve ad ile klasik eşleştirme.
+        var (id, kind) = Match(rawNumber, rawName, candidates);
+        return kind == MatchKind.ExactNumber ? (id, MatchKind.FuzzyNumber) : (id, kind);
+    }
+
+    /// <summary>Kayıtlı numaranın, okunan hane olasılıklarına göre log-olasılığı. Boş kutu her rakama eşit olasılık verir.</summary>
+    private static double? LogLikelihood(IReadOnlyList<float[]?> digits, string number)
+    {
+        if (number.Length != digits.Count || number.Any(c => c is < '0' or > '9'))
+            return null;
+        double sum = 0;
+        for (var i = 0; i < digits.Count; i++)
+        {
+            var p = digits[i];
+            // Model aşırı emin olsa bile tek hane tüm eşleşmeyi sıfırlamasın diye olasılık yumuşatılır.
+            sum += p == null ? Math.Log(0.1) : Math.Log(p[number[i] - '0'] * 0.97 + 0.003);
+        }
+        return sum;
+    }
+
     public static (int? StudentId, MatchKind Kind) Match(
         string rawNumber, string rawName, IReadOnlyList<StudentCandidate> candidates)
     {
@@ -33,6 +96,17 @@ public static class StudentMatcher
 
         if (number.Length > 0)
         {
+            // Okunamayan haneler ('?') joker kabul edilir: okunan tüm haneleri tutan TEK öğrenci varsa eşleşir.
+            if (number.Contains('?'))
+            {
+                var known = number.Count(ch => ch != '?');
+                var partial = candidates
+                    .Where(c => MatchesPattern(number, NormalizeNumber(c.Number)))
+                    .ToList();
+                if (known >= 6 && partial.Count == 1)
+                    return (partial[0].Id, MatchKind.PartialNumber);
+            }
+
             var exact = candidates.Where(c => NormalizeNumber(c.Number) == number).ToList();
             if (exact.Count == 1)
                 return (exact[0].Id, MatchKind.ExactNumber);
@@ -81,7 +155,20 @@ public static class StudentMatcher
     }
 
     private static string NormalizeNumber(string s)
-        => new(s.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
+        => new(s.Where(c => char.IsLetterOrDigit(c) || c == '?').Select(char.ToUpperInvariant).ToArray());
+
+    /// <summary>'?' karakterleri herhangi bir haneyle eşleşir; uzunluklar aynı olmalıdır.</summary>
+    private static bool MatchesPattern(string pattern, string value)
+    {
+        if (pattern.Length != value.Length)
+            return false;
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            if (pattern[i] != '?' && pattern[i] != value[i])
+                return false;
+        }
+        return true;
+    }
 
     /// <summary>Türkçe karakterleri ASCII'ye indirger; büyük/küçük ve aksan farkını yok eder.</summary>
     private static string FoldName(string s)

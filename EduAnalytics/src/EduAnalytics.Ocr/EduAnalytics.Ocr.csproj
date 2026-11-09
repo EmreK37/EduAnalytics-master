@@ -27,4 +27,10 @@
     <ProjectReference Include="..\EduAnalytics.Core\EduAnalytics.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- El yazısı rakam modeli (MNIST + yazı tipleriyle eğitilmiş küçük CNN, ~180 KB).
+         Yeniden eğitmek için: tools/EduAnalytics.DigitTrainer -->
+    <EmbeddedResource Include="Recognition\digits-cnn.bin" LogicalName="EduAnalytics.Ocr.Recognition.digits-cnn.bin" />
+  </ItemGroup>
+
 </Project>

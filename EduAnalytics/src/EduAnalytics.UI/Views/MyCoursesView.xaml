@@ -28,13 +28,21 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    
-                    <TextBlock Text="Aktif Dersleriniz" FontWeight="SemiBold" FontSize="15" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,12"/>
-                    
-                    <ListBox Grid.Row="1" 
-                             ItemsSource="{Binding Courses}" 
+
+                    <TextBlock Text="Aktif Dersleriniz" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,10"/>
+
+                    <TextBox Grid.Row="1"
+                             Style="{StaticResource SearchBoxStyle}"
+                             Tag="Ders ara..."
+                             Text="{Binding CourseSearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Ders adına veya koduna göre ara"
+                             Margin="0,0,0,10"/>
+
+                    <ListBox Grid.Row="2" 
+                             ItemsSource="{Binding FilteredCourses}" 
                              SelectedItem="{Binding SelectedCourse, Mode=TwoWay}"
                              BorderThickness="0"
                              Background="Transparent">
@@ -92,13 +100,26 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="{Binding SelectedCourse.CourseName, FallbackValue='Ders Seçin'}" FontWeight="SemiBold" FontSize="15" Foreground="{DynamicResource TextPrimaryBrush}"/>
                             <TextBlock Text=" sınıf listesi" FontWeight="Regular" FontSize="15" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        </StackPanel>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource SearchBoxStyle}"
+                                     Tag="Öğrencilerde ara..."
+                                     Text="{Binding StudentSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Öğrenci no, ad soyad veya sınıf/şubeye göre ara"
+                                     Width="280"
+                                     Margin="16,0,0,0"/>
+                        </Grid>
 
                         <DataGrid Grid.Row="1"
-                                  ItemsSource="{Binding SelectedCourse.EnrolledStudents}"
+                                  ItemsSource="{Binding FilteredStudents}"
                                   AutoGenerateColumns="False"
                                   IsReadOnly="True"
                                   HeadersVisibility="Column"

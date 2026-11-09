@@ -6,15 +6,24 @@ public readonly record struct MmRect(double X, double Y, double Width, double He
 {
     public double Right => X + Width;
     public double Bottom => Y + Height;
+    public MmPoint Center => new(X + Width / 2, Y + Height / 2);
+    public MmRect Deflate(double d) => new(X + d, Y + d, Width - 2 * d, Height - 2 * d);
 }
 
 /// <summary>
-/// Optik formun mm cinsinden geometrisi. PDF üretici ve okuyucu AYNI sabitleri kullanır;
-/// form düzeni değişecekse yalnızca burası değişmelidir. Sayfa A4 (210×297 mm),
-/// koordinatlar sol üst köşeden ölçülür.
+/// Sınav kâğıdının sayfa düzeyindeki sabitleri. Sayfa A4 (210×297 mm), koordinatlar sol üst köşeden
+/// mm cinsinden ölçülür. Birinci sayfanın ayrıntılı geometrisi <see cref="ExamPaperLayout"/>'tadır;
+/// PDF üretici ve okuyucu AYNI sınıfları kullanır, form düzeni yalnızca bu iki dosyada değişir.
+///
+/// Sürüm 3: resmi üniversite sınav kâğıdı düzeni (antet, öğrenci bilgileri, Toplam Not – Paraf kutusu,
+/// ders tablosu, kurallar, "Soru Numarası / Alınan Not" puan tablosu, SORULAR). Öğrenci numarası
+/// 12 kutuya el yazısıyla yazılır; test soruları için optik cevap alanı bulunur. Sürüm 2 optik
+/// formları bu okuyucuyla okunamaz.
 /// </summary>
 public static class OpticalFormTemplate
 {
+    public const int Version = 3;
+
     public const double PageWidthMm = 210;
     public const double PageHeightMm = 297;
 
@@ -24,7 +33,7 @@ public static class OpticalFormTemplate
     public static int PageWidthPx => (int)(PageWidthMm * PxPerMm);
     public static int PageHeightPx => (int)(PageHeightMm * PxPerMm);
 
-    // ── Köşe hizalama işaretleri (içi dolu kare) ──
+    // ── Köşe hizalama işaretleri (içi dolu kare) — her sayfada ──
     public const double MarkerSizeMm = 6;
 
     /// <summary>Sıra: Sol-üst, Sağ-üst, Sol-alt, Sağ-alt (kare merkezleri).</summary>
@@ -36,52 +45,31 @@ public static class OpticalFormTemplate
         new(198, 285)
     };
 
+    // ── Sayfa kodu (sol kenar boşluğu) ──
+    // Köşe işaretleri 180° dönüşe göre simetrik olduğundan kâğıdın yönü ve sayfa türü bu iki küçük
+    // kareden okunur: yön karesi her sayfada doludur (ters taranan sayfada sağ kenara düşer),
+    // ilk sayfa karesi yalnızca okunacak 1. sayfada doludur (devam sayfalarında boş çerçeve).
+    public const double PageCodeSizeMm = 3.6;
+    public static readonly MmPoint OrientationSlot = new(12, 138);
+    public static readonly MmPoint FirstPageSlot = new(12, 145);
+
+    // ── İçerik alanı ──
+    public const double ContentLeftMm = 17;
+    public const double ContentRightMm = 193;
+    public const double ContentWidthMm = ContentRightMm - ContentLeftMm;
+
+    /// <summary>Sayfa altında sayfa numarası ve alt köşe işaretleri için ayrılan yükseklik.</summary>
+    public const double FooterHeightMm = 16;
+
+    /// <summary>Devam sayfalarının üst bilgisi (köşe işaretleri + "devam" satırı) için ayrılan yükseklik.</summary>
+    public const double ContinuationHeaderHeightMm = 24;
+
     // ── Kapasite ──
-    public const int MaxQuestions = 100;
-    public const int QuestionsPerColumn = 25;
-    public const int OptionCount = 5;          // form her zaman A–E basar
-    public const int StudentNumberCells = 12;  // öğrenci no kutucuk sayısı
+    public const int MaxQuestions = 60;
+    public const int OptionCount = 5;          // test sorularında her zaman A–E basılır
+    public const int StudentNumberCells = 12;  // öğrenci no hane sayısı
     public const int MaxBooklets = 5;
 
-    // ── Bölüm 1: PaddleOCR ile okunan alanlar ──
-    /// <summary>Ad-soyad yazma kutusu (serbest el yazısı).</summary>
-    public static readonly MmRect NameBox = new(15, 46, 110, 12);
-
-    /// <summary>Öğrenci no kutucuk şeridi; her karakter ayrı hücreye yazılır.</summary>
-    public static readonly MmRect NumberRow = new(15, 64, NumberCellWidthMm * StudentNumberCells, 12);
-    public const double NumberCellWidthMm = 9;
-
-    public static MmRect NumberCell(int index)
-        => new(NumberRow.X + index * NumberCellWidthMm, NumberRow.Y, NumberCellWidthMm, NumberRow.Height);
-
-    // ── Kitapçık baloncukları (OMR) ──
-    public const double BookletBubbleFirstX = 148;
-    public const double BookletBubblePitch = 9;
-    public const double BookletBubbleY = 70;
-
-    public static MmPoint BookletBubbleCenter(int bookletIndex)
-        => new(BookletBubbleFirstX + bookletIndex * BookletBubblePitch, BookletBubbleY);
-
-    // ── Bölüm 2: Cevap baloncukları (OMR) ──
+    // ── Baloncuklar ──
     public const double BubbleRadiusMm = 1.8;
-    public const double AnswerFirstRowY = 90;      // ilk satırın baloncuk merkezi
-    public const double AnswerRowPitch = 7.5;
-    public const double AnswerBubbleFirstOffsetX = 13; // kolon başlangıcı → ilk şık merkezi
-    public const double AnswerOptionPitch = 7;
-    public const double QuestionNumberOffsetX = 7;     // soru numarası metninin sağ hizası
-
-    /// <summary>Her sütunun sol başlangıç x'i. 4 sütun × 25 soru = 100 soru kapasitesi.</summary>
-    public static readonly double[] ColumnOriginsX = { 15, 62, 109, 156 };
-
-    /// <summary>Formdaki sıra (0-bazlı) → sütun/satır konumu.</summary>
-    public static (int Column, int Row) FormPosition(int formIndex)
-        => (formIndex / QuestionsPerColumn, formIndex % QuestionsPerColumn);
-
-    public static MmPoint AnswerBubbleCenter(int formIndex, int optionIndex)
-    {
-        var (col, row) = FormPosition(formIndex);
-        return new MmPoint(
-            ColumnOriginsX[col] + AnswerBubbleFirstOffsetX + optionIndex * AnswerOptionPitch,
-            AnswerFirstRowY + row * AnswerRowPitch);
-    }
 }

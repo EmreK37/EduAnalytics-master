@@ -16,7 +16,7 @@ public partial class MainWindow : FluentWindow
 {
     public static readonly DependencyProperty IsSidebarCollapsedProperty =
         DependencyProperty.Register(nameof(IsSidebarCollapsed), typeof(bool), typeof(MainWindow),
-            new PropertyMetadata(false));
+            new PropertyMetadata(true)); // Uygulama menü daraltılmış (yalnızca ikonlar) olarak açılır
 
     public bool IsSidebarCollapsed
     {

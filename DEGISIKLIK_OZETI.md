@@ -1,11 +1,71 @@
 # EduAnalytics — Değişiklik Özeti
 
-**Tarih:** 10 Ekim 2026
-**Durum:** Proje derleniyor ve uygulama açılıyor. Aşağıdaki "Açık konular" bölümündeki üç karar bekliyor; bunlardan biri (veritabanı şeması) sınav oluşturmayı ve sınava soru eklemeyi engelliyor.
+**Tarih:** 10 Ekim 2026 (son güncelleme: 16 Ekim 2026)
+**Durum:** Proje derleniyor ve uygulama açılıyor. Sınav oluşturmayı engelleyen veritabanı şeması sorunu 15 Ekim'de çözüldü. Optik Okuma, resmi sınav kâğıdı ve el yazısı puan okumayla yenilendi (16 Ekim). "Açık konular" bölümünde kararlar ve gerçek kâğıtla pilot bekliyor.
 
 ---
 
 ## 1. Yeni özellikler
+
+### Resmi sınav kâğıdı ve el yazısı puan okuma (Optik Okuma)
+Optik Okuma ekranı artık yalnızca test cevap formu değil, Doğuş Üniversitesi sınav kâğıdının birebir düzeninde tam
+bir sınav kâğıdı üretiyor ve okuyor.
+
+**Kâğıt (Sınav Kâğıdı Üret)**
+- **Antet:** kurum logosu ve adı; kalın başlıkta ders kodu, ders adı ve sınav (ör. "YM344 YAZILIM KALİTE GÜVENCESİ VE
+  TESTİ VİZE SINAVI"); eğitim-öğretim yılı ve dönem.
+- **Öğrenci bilgileri:** "Öğrencinin / Student's" altında Adı Soyadı, Numarası, Bölüm - Program ve İmzası alanları.
+  Numara OCR için 12 kutuya, her kutuya bir rakam yazılır. Sağda **Toplam Not – Paraf** kutusu var.
+- **Ders tablosu:** DERS / Course; Adı, Kodu ve Sorumlusu satırları; sınav türü (Vize / Midterm), Sınav Tarihi ve Süre.
+  Altında **KURALLAR / Rules** maddeleri.
+- **Puan tablosu:**
+  - Soru Numarası / Alınan Not satırları, sınavdaki soru sayısına göre (en az 10, en çok 20 kutu).
+  - 20'den fazla soruda ek satır basılır; kullanılmayan kutular gri.
+  - Altında "*Her sorunun puan değeri…" notu.
+- **SORULAR:** test soruları için optik cevap alanı, ardından soru metinleri. Her sorunun yanında puanı yazar; klasik
+  sorulara cevap alanı ayrılır. İstenirse soru metinleri basılmaz, yalnızca cevap alanları kalır.
+- **Pencerede düzenlenebilenler:** kurum adı, logo, başlık, yıl, dönem, öğretim elemanı, sınav türü, tarih, süre ve
+  kurallar. Canlı önizleme vardır. Kurum, logo, öğretim elemanı ve kurallar sonraki sınav için hatırlanır.
+- **Çok kitapçıklı sınav:** her kitapçık kendi soru sırası ve şıklarıyla ayrı PDF olarak kaydedilir. Kitapçık işareti
+  kâğıda önceden basılır.
+- **Logo:** Kurumun resmi logosu uygulamayla gelmez. "Logo Seç…" ile kendi dosyanızı seçin.
+
+**Okuma (Tarama Yükle)**
+1. **Öğrenci numarası:** kutulardaki el yazısı rakamlar okunur. Öğrenci, numaranın tamamının olasılığıyla derse kayıtlı
+   öğrenciler arasından seçilir; bir iki belirsiz hane çoğunlukla doğru öğrenciye çözülür.
+2. **"Alınan Not" satırı:**
+   - Tablo çizgileri görüntüde bulunur ve her soru için kutu sırayla kırpılır.
+   - Kutudaki el yazısı puan okunur. Virgüllü puanlar (`17,5`) ve bitişik yazılmış rakamlar da okunur.
+   - Sorunun puanını aşan okuma elenir.
+3. **Puanların kullanımı:**
+   - Klasik soruların puanı bu kutulardan alınır.
+   - Test sorularının puanı optik işaretten hesaplanır; tabloda farklı bir değer yazıyorsa uyarı verilir.
+4. **Toplam Not kutusu:** okunur ve soru puanlarının toplamıyla karşılaştırılır.
+5. **Devam sayfaları:** soru metinlerinin devam sayfaları tanınır ve atlanır. Ters taranan kâğıt otomatik çevrilir.
+
+**İnceleme ekranı**
+- **Satırda:** okunan numara, numara kutularının görüntüsü ve sonuç (test / klasik / toplam).
+- **Satırın altında:**
+  - kırpılmış **Soru Numarası / Alınan Not** tablosu ve hemen altında her soru için düzenlenebilir puan kutusu;
+  - Toplam Not kutusunun görüntüsü ve "Hesaplanan 62,5 — kâğıttaki toplamla aynı ✓" ya da uyuşmazlık uyarısı.
+- **İşaretleme:** belirsiz okunan, boş klasik ya da optikle uyuşmayan kutular sarı çerçeveyle işaretlenir.
+- **Düzeltme:** bir puan düzeltilince değerlendirme ve uyarılar anında yenilenir.
+- **Kayıt:** **Cevapları ve Puanları Kaydet** düğmesiyle yapılır.
+  - Test cevapları: kitapçık şık çözme ve doğru/yanlış değerlendirmesiyle kaydedilir.
+  - Klasik puanlar: `StudentAnswer.Score` alanına yazılır.
+  - Boş bırakılan puan kutusu mevcut puanı değiştirmez.
+
+**El yazısı rakam modeli**
+- Uygulamaya gömülü küçük bir sinir ağıdır (180 KB). İnternet ya da Python gerekmez.
+- MNIST el yazısı rakamları ve yazı tipleriyle eğitildi. Bozulmalar arasında Türkiye'de yaygın yazımlar da var:
+  ortası çizgili 7, bayraklı 1.
+- `tools/EduAnalytics.DigitTrainer` ile yeniden eğitilebilir.
+
+**Örnek kâğıtlar:** **Örnek Kâğıt Üret ve Oku** düğmesi ve depo kökündeki `SampleOptics/` klasörü el yazısıyla
+doldurulmuş, taramaya benzetilmiş kâğıtlar içerir. Bunlarla kâğıt ve tarayıcı olmadan deneme yapılabilir.
+
+> **Uyumsuzluk:** Önceki sürümün optik formları (kodlama baloncuklu numara) okunamaz; "sayfa kodu bulunamadı"
+> uyarısıyla bildirilir. Kâğıtları yeniden üretin.
 
 ### Mevcut sınava soru ekleme
 Sınav Yönetimi'ndeki her sınav kartında **Soru Ekle** butonu var.
@@ -131,26 +191,46 @@ Mevcut 11 öğrencinin numarası 12 haneli formata çevrildi. Giriş yılı sın
 - Soru ekleme ve çıkarma: veritabanının bir kopyası üzerinde çalıştırıldı. Sıra, puan ve kitapçık kayıtları doğru oluştu; aynı soruyu ikinci kez ekleme reddedildi; çıkarmada cevaplar silindi ve sıra düzeldi.
 - Puan dağıtımı ve 12 hane kuralı: örnek değerlerle kontrol edildi.
 - Görünüm: 24 ekran ve 8 diyalog, gerçek veriyle, açık ve koyu temada arka planda çizdirilip metin kırpılması açısından otomatik tarandı. Son taramada görünür kırpılma kalmadı.
+- **Sınav kâğıdı ve el yazısı okuma:**
+  - **Birim testleri:** 30 test geçti. Kapsam: eğik/gürültülü tarama, ters tarama, devam sayfası, B kitapçığı,
+    26 soruluk iki satırlı tablo, boş kutular, çift ve silik işaret, puan değerlendirmesi, olasılıkla öğrenci
+    eşleştirme.
+  - **İstatistiksel ölçüm:** Modelin eğitimde görmediği sentetik el yazısıyla 80 kâğıt üretildi. 960 numara hanesi,
+    480 puan kutusu ve 80 Toplam Not'un hepsi doğru okundu.
+  - **Uçtan uca:** Gerçek uygulamanın ekran mantığıyla, veritabanının kopyasında 65 kontrol yapıldı, hepsi geçti.
+    - Bilinen değerlerle tek öğrenci; kayıttan sonra test cevapları, doğru/yanlış ve klasik puanlar veritabanında
+      doğrulandı.
+    - "Örnek Kâğıt Üret ve Oku" ile 6 kâğıt: iki sayfalı PDF, ters tarama, yanlış toplam, çift/silik işaret, boş puan
+      ve kayıtsız öğrenci.
+    - A/B kitapçıklı, soru sırası ve şıkları karışık sınav.
+  - Ekran ve "Sınav Kâğıdı Üret" penceresi açık ve koyu temada çizdirildi; kırpılma yok.
 
 **Doğrulanmayanlar** (elle denenmesi gerekiyor)
 - Fareyle yapılan etkileşimler: sohbet penceresini sürükleme, tema anahtarına tıklama ve animasyonu, açılır listeler.
 - Koyu temada diyalog başlık çubuğunun rengi.
-- Gerçek veritabanında "Sınava Ekle": aşağıdaki 1. açık konu yüzünden hata verir.
+- **Gerçek el yazısı ve gerçek tarayıcı.** Sentetik kâğıtlarda okuma tam isabetli. Gönderilen fotoğraftaki kutusuz,
+  küçük ve bitişik yazılmış numarada ise 12 hanenin 8–9'u doğru okundu. Yazdırılmış kâğıt ve gerçek taramayla pilot
+  gerekiyor. Pilot adımları için bkz. `EduAnalytics/src/EduAnalytics.Ocr/README.md`.
 
 ---
 
 ## 6. Açık konular
 
-1. **Veritabanı şeması kodla uyuşmuyor (engelleyici).** Bu makinedeki veritabanında `ExamBookletQuestions` tablosunda kodda olmayan dört zorunlu sütun var: `PageNumber`, `PositionX`, `PositionY`, `Width`. Başka bir sürümden kalmış görünüyor. Bu yüzden sınav oluşturma ve sınava soru ekleme "Cannot insert NULL into PositionX" hatasıyla başarısız olur. İki çözüm var: veritabanını silip yeniden oluşturmak ya da şu iki satırı çalıştırmak:
-   ```sql
-   ALTER TABLE ExamBookletQuestions ADD DEFAULT 0 FOR PositionX;
-   ALTER TABLE ExamBookletQuestions ADD DEFAULT 0 FOR PositionY;
-   ```
+1. **Veritabanı şeması kodla uyuşmuyordu — çözüldü (15 Ekim 2026).**
+   - **Sorun:** Bu makinedeki veritabanı, kitapçık sayfa düzeni tutan başka bir uygulama sürümüyle oluşturulmuş. `ExamBookletQuestions` tablosunda kodda olmayan `PositionX` ve `PositionY` sütunları zorunlu ve varsayılansızdı. Bu yüzden sınav oluşturma ve sınava soru ekleme "Cannot insert the value NULL into column 'PositionX'" hatasıyla başarısız oluyordu.
+   - **Veritabanı:** Bu iki sütuna `0` varsayılanı eklendi. Mevcut kayıtlar ve düzen verisi korundu.
+   - **Açılış adımı (`DbInitializer`):** Uygulama açılışta aynı onarımı kendisi yapıyor. Sütunlar varsa ve varsayılanları yoksa ekleniyor, yoksa hiçbir şey yapılmıyor.
+   - **DbContext:** Kayıt başarısız olunca izlenen kayıtlar temizleniyor. Önceden aynı ekrandan yapılan ikinci deneme, geri alınmış kayıtlar yüzünden yabancı anahtar hatası veriyordu.
 2. **Ana Sayfa'da sabit yazılmış veriler.** "+2 Yeni", "Bekleyen 2 analiz raporu", "Yapay Zeka servisi çevrimiçi" ve "Veritabanı bağlantısı aktif" gerçek veriden gelmiyor. Gerçek veriye bağlanacak mı, kaldırılacak mı?
 3. **Ondalık ayırıcı tutarsız.** Aynı ekranda hem "0.383" hem "0,383" görünüyor. Hepsini virgüle çevirmek, puan kutularına "7.5" yazıldığında nasıl okunacağını da değiştirir; bu yüzden dokunulmadı.
 4. **Klasik soru filtresi hatası yeniden üretilemedi.** Veritabanındaki klasik sorular servis, ViewModel ve Sınav Oluştur havuzunda Klasik filtresiyle doğru geliyor. Hangi ekranda ve hangi adımlarla olduğu bilinirse devam edilebilir.
 5. **Şablon lisansı.** Cruip şablonu GPL-3.0 lisanslı. Koddan değil yalnızca görsel değerlerden yararlanıldı; proje dağıtılacaksa yine de gözden geçirilmeli.
 6. **Eski "Sınav Oluştur" ekranı.** `ExamCreateView` menüden erişilebilir değil; yalnızca puan dağıtımı güncellendi, diğer düzeltmeler uygulanmadı.
+7. **Kurum logosu.** Sınav kâğıdında üniversitenin resmi logosu uygulamayla gelmiyor. "Sınav Kâğıdı Üret" penceresinde
+   "Logo Seç…" ile resmi logo dosyası bir kez seçilmeli; seçim hatırlanır.
+8. **Optik okumada gerçek kâğıt pilotu.** Pilot yapılmadı; ayrıntı için bkz. 5. bölüm, "Doğrulanmayanlar". Pilotta
+   belirsiz okunan kutuların oranına göre güven eşiği (`ScoreReading.LowConfidence = 0,6`) ayarlanabilir. Yazıya özgü
+   hatalar görülürse gerçek örneklerle model yeniden eğitilebilir.
 
 ---
 
@@ -163,6 +243,22 @@ Mevcut 11 öğrencinin numarası 12 haneli formata çevrildi. Giriş yılı sın
 - `EduAnalytics.UI/Controls/ThemeSwitcher.xaml` ve `.xaml.cs` — tema anahtarı
 - `EduAnalytics.UI/Converters/QuestionTypeLabelConverter.cs`, `EnumLabelConverters.cs` — Türkçe etiketler
 - `EduAnalytics.UI/Assets/Fonts/` — Inter yazı tipi ve lisansı
+- Sınav kâğıdı ve el yazısı okuma:
+  - `EduAnalytics.Ocr/ExamPaperSpec.cs`, `ExamPaperLayout.cs`, `ExamPaperPdfGenerator.cs`: kâğıt tanımı, 1. sayfa
+    geometrisi ve PDF üretimi.
+  - `EduAnalytics.Ocr/ExamPaperFill.cs`, `ExamPaperFillRenderer.cs`, `ExamPaperSampleRenderer.cs`,
+    `SyntheticHandwriting.cs`: örnek kâğıtlar.
+  - `EduAnalytics.Ocr/Recognition/`: rakam modeli (`DigitClassifier.cs`, `DigitNormalizer.cs`, `digits-cnn.bin`) ve
+    `HandwrittenNumberReader.cs`.
+  - `EduAnalytics.Ocr/Reading/GridDetector.cs`: tablo ızgarası tespiti.
+  - `EduAnalytics.Ocr/ScoreSheetEvaluator.cs`: puan ve toplam denetimi.
+  - `EduAnalytics.UI/Views/ExamPaperDialog.xaml` ve `.xaml.cs`: "Sınav Kâğıdı Üret" penceresi;
+    `OmrGeneratorDialog`'un yerini aldı.
+  - `EduAnalytics.UI/Services/ExamPaperSettingsStore.cs`: hatırlanan antet ayarları.
+  - `EduAnalytics/tools/EduAnalytics.DigitTrainer/`: rakam modelinin eğitim aracı.
+  - `tests/EduAnalytics.Ocr.Tests/ExamPaperRoundTripTests.cs`, `ScoreSheetTests.cs`.
+- Kaldırılan dosyalar (önceki optik form sürümü): `OpticalFormSpec.cs`, `OpticalFormPdfGenerator.cs`,
+  `OpticalFormFill.cs`, `OpticalFormSampleRenderer.cs`, `OmrGeneratorDialog.xaml`/`.cs`, `OpticalFormRoundTripTests.cs`.
 
 **Başlıca değişen dosyalar**
 - İş mantığı: `ExamCrudService.cs`, `IExamCrudService.cs`, `StudentService.cs`, `DataImportService.cs`, `ExamListItemDto.cs`, `DbInitializer.cs`
@@ -172,3 +268,8 @@ Mevcut 11 öğrencinin numarası 12 haneli formata çevrildi. Giriş yılı sın
 - Diyaloglar: `StudentProfileDialog`, `QuestionCancelDialog`, `QuestionEditDialog`, `OmrGeneratorDialog`
 - ViewModel'ler: `ExamManagementViewModel`, `ExamFromBankViewModel`, `ExamCreateViewModel`, `StudentManagementViewModel`
 - Kodlama onarımı: `OpticalReadingViewModel.cs`, `LoginWindow.xaml.cs`, `UserSettingsDialog.xaml.cs`
+- Optik Okuma (sınav kâğıdı):
+  - OCR modülü: `OpticalFormTemplate.cs`, `Models/OpticalSheetResult.cs`, `StudentMatcher.cs`, `Reading/BubbleReader.cs`,
+    `Reading/OpticalFormReader.cs`, `Reading/IOpticalFormReader.cs`, `Reading/PaddleTextReader.cs`, `README.md`.
+  - Arayüz: `OpticalReadingViewModel.cs`, `ScannedSheetRowViewModel.cs`, `OpticalReadingView.xaml`.
+  - Örnekler: `SampleOptics/` (README dahil).

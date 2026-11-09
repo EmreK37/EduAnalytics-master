@@ -20,6 +20,22 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="HorizontalContentAlignment" Value="Right"/>
         </Style>
+
+        <!-- Kart başlığındaki aç/kapa düğmesi: arka plansız, tüm başlık tıklanabilir -->
+        <Style x:Key="ExpandToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid Style="{StaticResource PageRootGridStyle}">
@@ -35,6 +51,14 @@
                         Subtitle="Oluşturulan sınavları görüntüleyin, analiz ekranına geçin, soru ekleyin veya temel bilgileri düzenleyin."/>
 
         <StackPanel Grid.Row="1">
+            <TextBox Style="{StaticResource SearchBoxStyle}"
+                     Tag="Sınav ara..."
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="Sınav adı, ders adı veya sınav türüne göre ara"
+                     MaxWidth="420"
+                     HorizontalAlignment="Left"
+                     Width="420"
+                     Margin="0,0,0,14"/>
             <Border Style="{StaticResource AlertErrorStyle}"
                     Margin="0,0,0,8"
                     Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVisibility}}">
@@ -48,7 +72,7 @@
         </StackPanel>
 
         <ScrollViewer Style="{StaticResource PageScrollViewerStyle}" Grid.Row="2" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Exams}">
+            <ItemsControl ItemsSource="{Binding FilteredExams}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Style="{StaticResource BentoCardStyle}">
@@ -65,9 +89,37 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0" Margin="0,0,18,0">
-                                    <TextBlock Text="{Binding Title}"
-                                               FontSize="16" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    <!-- Başlık + ok: tıklayınca sınav soruları açılır/kapanır -->
+                                    <ToggleButton x:Name="ExpandToggle"
+                                                  Style="{StaticResource ExpandToggleStyle}"
+                                                  HorizontalAlignment="Left"
+                                                  ToolTip="Sınav sorularını göster/gizle">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Width="24" Height="24"
+                                                    CornerRadius="{DynamicResource RadiusLg}"
+                                                    Background="{DynamicResource PrimaryLightBrush}"
+                                                    Margin="0,0,10,0"
+                                                    VerticalAlignment="Center">
+                                                <mi:MaterialIcon Width="16" Height="16"
+                                                                 Foreground="{DynamicResource PrimaryBrush}">
+                                                    <mi:MaterialIcon.Style>
+                                                        <Style TargetType="mi:MaterialIcon">
+                                                            <Setter Property="Kind" Value="ChevronRight"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=ToggleButton}}" Value="True">
+                                                                    <Setter Property="Kind" Value="ChevronDown"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </mi:MaterialIcon.Style>
+                                                </mi:MaterialIcon>
+                                            </Border>
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontSize="16" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        </StackPanel>
+                                    </ToggleButton>
                                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                         <Border Background="{DynamicResource PrimaryLightBrush}" CornerRadius="{DynamicResource RadiusLg}" Padding="7,3" Margin="0,0,8,0">
                                             <TextBlock Text="{Binding ExamType, Converter={StaticResource ExamTypeLabel}}" Foreground="{DynamicResource PrimaryBrush}"
@@ -137,6 +189,7 @@
                                 </StackPanel>
 
                                 <Border Grid.Row="1" Grid.ColumnSpan="4"
+                                        Visibility="{Binding IsChecked, ElementName=ExpandToggle, Converter={StaticResource BoolToVisibility}}"
                                         Background="{DynamicResource PageBgBrush}"
                                         BorderBrush="{DynamicResource BorderSubtleBrush}"
                                         BorderThickness="1"
@@ -221,6 +274,17 @@
                              HorizontalAlignment="Center"/>
             <TextBlock Text="Henüz sınav yok" Style="{StaticResource EmptyStateTitleStyle}"/>
             <TextBlock Text="Sınav Oluştur ekranından yeni sınav oluşturabilirsiniz."
+                       Style="{StaticResource EmptyStateDescriptionStyle}"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2"
+                    Style="{StaticResource EmptyStateStyle}"
+                    Visibility="{Binding HasNoSearchResults, Converter={StaticResource BoolToVisibility}}">
+            <mi:MaterialIcon Kind="FileSearchOutline" Width="48" Height="48"
+                             Foreground="{DynamicResource SubtleBrush}"
+                             HorizontalAlignment="Center"/>
+            <TextBlock Text="Eşleşen sınav bulunamadı" Style="{StaticResource EmptyStateTitleStyle}"/>
+            <TextBlock Text="Farklı bir sınav adı, ders adı ya da sınav türü deneyin."
                        Style="{StaticResource EmptyStateDescriptionStyle}"/>
         </StackPanel>
 

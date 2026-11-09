@@ -341,7 +341,7 @@
         <!-- ═══ BODY ═══ -->
         <Grid Grid.Row="1" Background="{DynamicResource PageBgBrush}">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="SidebarColumn" Width="260"/>
+                <ColumnDefinition x:Name="SidebarColumn" Width="64"/> <!-- varsayılan: daraltılmış; MainWindow.xaml.cs SidebarCollapsedWidth ile aynı -->
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition x:Name="AIPanelColumn" Width="0"/>
             </Grid.ColumnDefinitions>

@@ -1,0 +1,160 @@
+﻿<Window x:Class="EduAnalytics.UI.Views.ExamPaperDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mi="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
+        Title="Sınav Kâğıdı Üret" Height="900" Width="1240" MinHeight="620" MinWidth="980"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource PageBgBrush}">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="380"/>
+            <ColumnDefinition Width="1"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Ayarlar -->
+        <Grid Background="{DynamicResource CardBgBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="22,20,22,8">
+                <StackPanel>
+                    <TextBlock Text="Sınav Kâğıdı" FontSize="18.5" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock x:Name="SummaryText" Text="-" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="0,4,0,18"/>
+
+                    <TextBlock Text="Kurum Adı" Style="{StaticResource LabelStyle}"/>
+                    <TextBox x:Name="InstitutionTextBox" Margin="0,0,0,10" TextChanged="Setting_Changed"/>
+
+                    <TextBlock Text="Kurum Logosu (isteğe bağlı)" Style="{StaticResource LabelStyle}"/>
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="LogoPathText" Text="Logo seçilmedi" Style="{StaticResource CaptionStyle}"
+                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <Button Grid.Column="1" Content="Seç…" Style="{StaticResource SecondaryButtonStyle}" Padding="10,4" Margin="8,0,0,0"
+                                Click="SelectLogo_Click" ToolTip="Antetin solunda basılacak logo (PNG/JPEG)"/>
+                        <Button Grid.Column="2" Content="Kaldır" Style="{StaticResource SecondaryButtonStyle}" Padding="10,4" Margin="6,0,0,0"
+                                Click="ClearLogo_Click"/>
+                    </Grid>
+
+                    <TextBlock Text="Başlıktaki Sınav Adı" Style="{StaticResource LabelStyle}"/>
+                    <TextBox x:Name="ExamTitleTextBox" Margin="0,0,0,10" TextChanged="Setting_Changed"
+                             ToolTip="Başlıkta ders kodu ve adından sonra yazılır, ör. &quot;1. Vize Sınavı&quot;"/>
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Eğitim-Öğretim Yılı" Style="{StaticResource LabelStyle}"/>
+                            <TextBox x:Name="AcademicYearTextBox" TextChanged="Setting_Changed" ToolTip="ör. 2025 – 2026"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Dönem" Style="{StaticResource LabelStyle}"/>
+                            <ComboBox x:Name="SemesterCombo" SelectionChanged="Setting_Changed">
+                                <ComboBoxItem Content="Güz" Tag="Fall"/>
+                                <ComboBoxItem Content="Bahar" Tag="Spring"/>
+                                <ComboBoxItem Content="Yaz" Tag="Summer"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Sorumlu Öğretim Elemanı" Style="{StaticResource LabelStyle}"/>
+                    <TextBox x:Name="LecturerTextBox" Margin="0,0,0,10" TextChanged="Setting_Changed"/>
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Sınav Türü" Style="{StaticResource LabelStyle}"/>
+                            <ComboBox x:Name="ExamTypeCombo" SelectionChanged="Setting_Changed">
+                                <ComboBoxItem Content="Vize" Tag="Midterm"/>
+                                <ComboBoxItem Content="Final" Tag="Final"/>
+                                <ComboBoxItem Content="Bütünleme" Tag="Make-up"/>
+                                <ComboBoxItem Content="Kısa Sınav" Tag="Quiz"/>
+                                <ComboBoxItem Content="Ödev" Tag="Homework"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Süre (dakika)" Style="{StaticResource LabelStyle}"/>
+                            <TextBox x:Name="DurationTextBox" TextChanged="Setting_Changed" ToolTip="Boş bırakılırsa süre basılmaz"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Sınav Tarihi" Style="{StaticResource LabelStyle}"/>
+                    <DatePicker x:Name="ExamDatePicker" Margin="0,0,0,10" SelectedDateChanged="Setting_Changed"/>
+
+                    <TextBlock Text="Kurallar (her satır bir madde)" Style="{StaticResource LabelStyle}"/>
+                    <TextBox x:Name="RulesTextBox" AcceptsReturn="True" TextWrapping="Wrap" Height="96"
+                             VerticalScrollBarVisibility="Auto" Margin="0,0,0,12" TextChanged="Setting_Changed"
+                             ToolTip="Kâğıttaki KURALLAR bölümüne madde işaretiyle basılır; uzun metin kutuya sığacak kadar küçültülür."/>
+
+                    <CheckBox x:Name="PrintTextsCheckBox" Content="Soru metinlerini kâğıda yazdır" Margin="0,0,0,4"
+                              Checked="Setting_Changed" Unchecked="Setting_Changed"/>
+                    <TextBlock Text="Kapalıysa yalnızca cevap alanları basılır (soru kitapçığı ayrı dağıtılır)."
+                               Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="24,0,0,14"/>
+
+                    <StackPanel x:Name="BookletPanel" Visibility="Collapsed" Margin="0,0,0,10">
+                        <TextBlock Text="Önizlenen Kitapçık" Style="{StaticResource LabelStyle}"/>
+                        <ComboBox x:Name="BookletCombo" SelectionChanged="Setting_Changed"/>
+                        <TextBlock Text="Her kitapçık kendi soru sırasıyla ayrı PDF olarak kaydedilir; kitapçık işareti kâğıda önceden basılır."
+                                   Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                    </StackPanel>
+
+                    <Border Background="{DynamicResource PageBgBrush}" CornerRadius="{DynamicResource RadiusMd}" Padding="12" Margin="0,4,0,8">
+                        <StackPanel>
+                            <TextBlock Text="Okuma için sabit alanlar" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,6"/>
+                            <TextBlock Style="{StaticResource CaptionStyle}" TextWrapping="Wrap"
+                                       Text="Öğrenci numarası 12 kutuya el yazısıyla yazılır. Öğretmen her sorunun puanını &quot;Alınan Not&quot; satırına, toplamı Toplam Not kutusuna yazar; taranınca puanlar ve numara otomatik okunur, test cevapları optik alandan değerlendirilir."/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="22,12">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Kapat" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0" Click="Close_Click"/>
+                    <Button Style="{StaticResource PrimaryButtonStyle}" Click="SavePdf_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <mi:MaterialIcon Kind="FilePdfBox" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="PDF Kaydet"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Column="1" Background="{DynamicResource BorderBrush}"/>
+
+        <!-- Önizleme: basılacak PDF ile aynı çizimden üretilir -->
+        <Grid Grid.Column="2">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24">
+                <ItemsControl x:Name="PreviewPages">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" Margin="0,0,0,18"
+                                    MaxWidth="760" HorizontalAlignment="Center" Effect="{DynamicResource ShadowLg}">
+                                <Image Source="{Binding}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <Border x:Name="PreviewError" Visibility="Collapsed" Style="{StaticResource AlertErrorStyle}"
+                    VerticalAlignment="Top" Margin="24">
+                <TextBlock x:Name="PreviewErrorText" Foreground="{DynamicResource DangerEmphasisBrush}" TextWrapping="Wrap"/>
+            </Border>
+            <ProgressBar x:Name="PreviewProgress" IsIndeterminate="True" Height="3" VerticalAlignment="Top" Visibility="Collapsed"/>
+        </Grid>
+    </Grid>
+</Window>

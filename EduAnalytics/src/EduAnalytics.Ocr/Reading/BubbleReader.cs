@@ -5,8 +5,8 @@ using OpenCvSharp;
 namespace EduAnalytics.Ocr.Reading;
 
 /// <summary>
-/// OMR: kanonik sayfadaki baloncukların doluluk oranını ölçüp işaretlenen şıkkı belirler.
-/// PaddleOCR burada kullanılmaz — bir baloncuğun karalanıp karalanmadığı piksel sayma işidir.
+/// OMR: kanonik sayfadaki baloncukların ve sayfa kodu karelerinin doluluk oranını ölçer.
+/// Bir baloncuğun karalanıp karalanmadığı piksel sayma işidir; metin tanıma kullanılmaz.
 /// </summary>
 public static class BubbleReader
 {
@@ -15,6 +15,9 @@ public static class BubbleReader
 
     /// <summary>Bu oranın üstü (ama dolu eşiğinin altı) silik işaret sayılır ve incelemeye düşer.</summary>
     private const double WeakThreshold = 0.26;
+
+    /// <summary>Sayfa kodu karesi bu orandan doluysa "dolu" sayılır (boş çerçevede yalnızca kenar çizgisi vardır).</summary>
+    private const double PageCodeFilledThreshold = 0.6;
 
     /// <summary>
     /// Kanonik gri sayfadan mürekkep maskesi üretir (mürekkep = beyaz piksel).
@@ -32,25 +35,52 @@ public static class BubbleReader
         return ink;
     }
 
-    /// <summary>Tek sorunun baloncuk satırını okur (formIndex = formdaki 0-bazlı satır sırası).</summary>
-    public static BubbleReadResult ReadAnswerRow(Mat inkMask, int formIndex)
+    /// <summary>
+    /// Sayfa kodunu okur: yön karesi dolu mu (sayfa bu yönde mi duruyor) ve ilk sayfa karesi dolu mu.
+    /// Kareler büyük ve tam dolu olduğu için Otsu eşiği yeterlidir.
+    /// </summary>
+    public static (bool Oriented, bool FirstPage) ReadPageCode(Mat canonicalGray)
+    {
+        using var binary = new Mat();
+        Cv2.Threshold(canonicalGray, binary, 0, 255, ThresholdTypes.BinaryInv | ThresholdTypes.Otsu);
+        var oriented = SquareFill(binary, OpticalFormTemplate.OrientationSlot) >= PageCodeFilledThreshold;
+        var firstPage = SquareFill(binary, OpticalFormTemplate.FirstPageSlot) >= PageCodeFilledThreshold;
+        return (oriented, firstPage);
+    }
+
+    /// <summary>Kare içinin (kenar çizgisi hariç) mürekkep oranı.</summary>
+    private static double SquareFill(Mat binary, MmPoint centerMm)
+    {
+        var px = OpticalFormTemplate.PxPerMm;
+        var half = (OpticalFormTemplate.PageCodeSizeMm / 2 - 0.6) * px;
+        var rect = new Rect((int)Math.Round(centerMm.X * px - half), (int)Math.Round(centerMm.Y * px - half),
+            (int)Math.Round(half * 2), (int)Math.Round(half * 2));
+        rect &= new Rect(0, 0, binary.Width, binary.Height);
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return 0;
+        using var roi = new Mat(binary, rect);
+        return Cv2.CountNonZero(roi) / (double)(rect.Width * rect.Height);
+    }
+
+    /// <summary>Tek test sorusunun baloncuk satırını okur (mcIndex = kâğıttaki test soruları sırasıyla, 0-bazlı).</summary>
+    public static BubbleReadResult ReadAnswerRow(Mat inkMask, ExamPaperLayout layout, int mcIndex)
     {
         var ratios = new double[OpticalFormTemplate.OptionCount];
         for (var opt = 0; opt < OpticalFormTemplate.OptionCount; opt++)
-            ratios[opt] = FillRatio(inkMask, OpticalFormTemplate.AnswerBubbleCenter(formIndex, opt));
+            ratios[opt] = FillRatio(inkMask, layout.AnswerBubbleCenter(mcIndex, opt), OpticalFormTemplate.BubbleRadiusMm);
 
         var result = Decide(ratios, out var optionIndex);
-        result.FormIndex = formIndex;
+        result.FormIndex = mcIndex;
         result.Option = optionIndex >= 0 ? (OptionLetter)(optionIndex + 1) : OptionLetter.Empty;
         return result;
     }
 
-    /// <summary>Kitapçık baloncuklarını okur; işaretli kitapçığın index'ini ve güveni döner.</summary>
-    public static (int? Index, double Confidence, bool Ambiguous) ReadBookletRow(Mat inkMask, int bookletCount)
+    /// <summary>Kitapçık baloncuklarını okur; işaretli (basılı kâğıtta önceden dolu) kitapçığın index'ini ve güveni döner.</summary>
+    public static (int? Index, double Confidence, bool Ambiguous) ReadBookletRow(Mat inkMask, ExamPaperLayout layout, int bookletCount)
     {
         var ratios = new double[bookletCount];
         for (var i = 0; i < bookletCount; i++)
-            ratios[i] = FillRatio(inkMask, OpticalFormTemplate.BookletBubbleCenter(i));
+            ratios[i] = FillRatio(inkMask, layout.BookletBubbleCenter(i), OpticalFormTemplate.BubbleRadiusMm);
 
         var decision = Decide(ratios, out var index);
         if (decision.MultipleMarks || index < 0)
@@ -58,63 +88,12 @@ public static class BubbleReader
         return (index, decision.Confidence, decision.WeakMark);
     }
 
-    /// <summary>
-    /// Kanonik sayfanın şablonla hizalanma skoru: her cevap baloncuğunun basılı çemberinin
-    /// bulunması gereken halka bölgesindeki mürekkep oranlarının ortalaması. Köşe işaretleri
-    /// 180° dönüşe göre simetrik olduğundan ters taranmış sayfa da hizalamadan geçer; doğru
-    /// yön bu skorla ayırt edilir (ters sayfada baloncuklar çemberlerin üstüne düşmez).
-    /// Çember çizgisi ince olduğu için erode'suz ham eşik kullanılır.
-    /// </summary>
-    public static double TemplateAlignmentScore(Mat canonicalGray, int questionCount)
-    {
-        using var binary = new Mat();
-        Cv2.Threshold(canonicalGray, binary, 0, 255, ThresholdTypes.BinaryInv | ThresholdTypes.Otsu);
-
-        double sum = 0;
-        var samples = 0;
-        for (var i = 0; i < questionCount; i++)
-        {
-            for (var opt = 0; opt < OpticalFormTemplate.OptionCount; opt++)
-            {
-                sum += AnnulusInkRatio(binary, OpticalFormTemplate.AnswerBubbleCenter(i, opt));
-                samples++;
-            }
-        }
-        return samples == 0 ? 0 : sum / samples;
-    }
-
-    /// <summary>Baloncuk çemberinin geçtiği halka bölgesindeki (iç–dış yarıçap arası) mürekkep oranı.</summary>
-    private static double AnnulusInkRatio(Mat binary, MmPoint centerMm)
+    /// <summary>Verilen yarıçaptaki baloncuğun iç diskindeki mürekkep oranı (0–1). Çemberin kendi çizgisi dışarıda bırakılır.</summary>
+    public static double FillRatio(Mat inkMask, MmPoint centerMm, double bubbleRadiusMm)
     {
         var cx = (int)Math.Round(centerMm.X * OpticalFormTemplate.PxPerMm);
         var cy = (int)Math.Round(centerMm.Y * OpticalFormTemplate.PxPerMm);
-        var outer = (int)Math.Round((OpticalFormTemplate.BubbleRadiusMm + 0.35) * OpticalFormTemplate.PxPerMm);
-        var inner = (int)Math.Round((OpticalFormTemplate.BubbleRadiusMm - 0.35) * OpticalFormTemplate.PxPerMm);
-
-        var roiRect = new Rect(cx - outer, cy - outer, outer * 2 + 1, outer * 2 + 1);
-        roiRect &= new Rect(0, 0, binary.Width, binary.Height);
-        if (roiRect.Width <= 0 || roiRect.Height <= 0)
-            return 0;
-
-        using var roi = new Mat(binary, roiRect);
-        using var ring = new Mat(roiRect.Height, roiRect.Width, MatType.CV_8UC1, Scalar.Black);
-        var center = new Point(cx - roiRect.X, cy - roiRect.Y);
-        Cv2.Circle(ring, center, outer, Scalar.White, thickness: -1);
-        Cv2.Circle(ring, center, inner, Scalar.Black, thickness: -1);
-
-        using var masked = new Mat();
-        Cv2.BitwiseAnd(roi, ring, masked);
-
-        var ringArea = Cv2.CountNonZero(ring);
-        return ringArea == 0 ? 0 : Cv2.CountNonZero(masked) / (double)ringArea;
-    }
-
-    /// <summary>Baloncuğun iç diskindeki mürekkep oranı (0–1). Çemberin kendi çizgisi dışarıda bırakılır.</summary>
-    public static double FillRatio(Mat inkMask, MmPoint centerMm)
-    {
-        var cx = (int)Math.Round(centerMm.X * OpticalFormTemplate.PxPerMm);
-        var cy = (int)Math.Round(centerMm.Y * OpticalFormTemplate.PxPerMm);
-        var radius = (int)Math.Round((OpticalFormTemplate.BubbleRadiusMm - 0.4) * OpticalFormTemplate.PxPerMm);
+        var radius = (int)Math.Round((bubbleRadiusMm - 0.4) * OpticalFormTemplate.PxPerMm);
 
         var roiRect = new Rect(cx - radius, cy - radius, radius * 2 + 1, radius * 2 + 1);
         roiRect &= new Rect(0, 0, inkMask.Width, inkMask.Height);

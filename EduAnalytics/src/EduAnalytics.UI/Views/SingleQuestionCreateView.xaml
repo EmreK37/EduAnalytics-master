@@ -286,6 +286,7 @@
                                                  Padding="6">
                                             <ListBox.ItemContainerStyle>
                                                 <Style TargetType="ListBoxItem">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                                                     <Setter Property="Padding" Value="0"/>
                                                     <Setter Property="Margin" Value="0,2"/>
                                                 </Style>

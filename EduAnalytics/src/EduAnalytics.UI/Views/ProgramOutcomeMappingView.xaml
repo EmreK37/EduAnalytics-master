@@ -10,6 +10,19 @@
              mc:Ignorable="d"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
 
+    <UserControl.Resources>
+        <!-- PÇ-ÖÇ matris hücresi: dar sütunlara sığan kompakt açılır kutu -->
+        <Style x:Key="MatrixCellComboStyle" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="7,2"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Margin" Value="4,0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Resources>
+
     <Grid Style="{StaticResource PageRootGridStyle}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -75,6 +88,7 @@
                         </ListBox.ItemsPanel>
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                                 <Setter Property="Padding" Value="0"/>
                                 <Setter Property="Margin" Value="0,0,10,10"/>
                                 <Setter Property="Cursor" Value="Hand"/>
@@ -322,81 +336,89 @@
                             BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1"
                             CornerRadius="{DynamicResource RadiusLg}">
+                        <!-- Matris: yatay kaydırma yok; PÇ sütunları kalan genişliği eşit paylaşır (yıldız düzen). -->
                         <ScrollViewer MaxHeight="360"
-                                      HorizontalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Width="124"
-                                            Height="38"
+                                <!-- Başlık satırı -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="72"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Height="34"
                                             Background="{DynamicResource SurfaceSunkenBrush}"
                                             BorderBrush="{DynamicResource BorderSubtleBrush}"
                                             BorderThickness="0,0,1,1">
                                         <TextBlock Text="ÖÇ"
                                                    FontWeight="SemiBold"
+                                                   FontSize="11.5"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"/>
                                     </Border>
-                                    <ItemsControl ItemsSource="{Binding MatrixColumns}">
+                                    <ItemsControl Grid.Column="1" ItemsSource="{Binding MatrixColumns}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
-                                                <StackPanel Orientation="Horizontal"/>
+                                                <UniformGrid Rows="1"
+                                                             Columns="{Binding DataContext.MatrixColumns.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border Width="76"
-                                                        Height="38"
+                                                <Border Height="34"
                                                         Background="{DynamicResource SurfaceSunkenBrush}"
                                                         BorderBrush="{DynamicResource BorderSubtleBrush}"
                                                         BorderThickness="0,0,1,1"
                                                         ToolTip="{Binding ToolTip}">
                                                     <TextBlock Text="{Binding Label}"
                                                                FontWeight="SemiBold"
+                                                               FontSize="11.5"
+                                                               TextTrimming="CharacterEllipsis"
                                                                HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"/>
                                                 </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                </StackPanel>
+                                </Grid>
 
+                                <!-- ÖÇ satırları -->
                                 <ItemsControl ItemsSource="{Binding MatrixRows}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <StackPanel Orientation="Horizontal">
-                                                <Border Width="124"
-                                                        Height="42"
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="72"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Height="38"
                                                         BorderBrush="{DynamicResource BorderSubtleBrush}"
                                                         BorderThickness="0,0,1,1"
                                                         ToolTip="{Binding ToolTip}">
                                                     <TextBlock Text="{Binding RowLabel}"
                                                                FontWeight="SemiBold"
+                                                               FontSize="11.5"
                                                                HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"/>
                                                 </Border>
 
-                                                <ItemsControl ItemsSource="{Binding Cells}">
+                                                <ItemsControl Grid.Column="1" ItemsSource="{Binding Cells}">
                                                     <ItemsControl.ItemsPanel>
                                                         <ItemsPanelTemplate>
-                                                            <StackPanel Orientation="Horizontal"/>
+                                                            <UniformGrid Rows="1"
+                                                                         Columns="{Binding DataContext.MatrixColumns.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                                                         </ItemsPanelTemplate>
                                                     </ItemsControl.ItemsPanel>
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>
-                                                            <Border Width="76"
-                                                                    Height="42"
+                                                            <Border Height="38"
                                                                     BorderBrush="{DynamicResource BorderSubtleBrush}"
                                                                     BorderThickness="0,0,1,1"
                                                                     ToolTip="{Binding ToolTip}">
                                                                 <ComboBox SelectedItem="{Binding ContributionLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                           SelectionChanged="MatrixContribution_SelectionChanged"
-                                                                          Width="58"
-                                                                          MinHeight="30"
-                                                                          Padding="8,4"
-                                                                          HorizontalAlignment="Center"
-                                                                          VerticalAlignment="Center"
-                                                                          HorizontalContentAlignment="Center"
+                                                                          Style="{StaticResource MatrixCellComboStyle}"
                                                                           ToolTip="{Binding ToolTip}">
                                                                     <ComboBox.Items>
                                                                         <sys:Int32>1</sys:Int32>
@@ -410,7 +432,7 @@
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
-                                            </StackPanel>
+                                            </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

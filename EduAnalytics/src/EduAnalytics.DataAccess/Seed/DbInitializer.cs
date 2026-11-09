@@ -1,6 +1,7 @@
 ﻿using EduAnalytics.Core.Entities;
 using EduAnalytics.Core.Enums;
 using EduAnalytics.DataAccess.Context;
+using Microsoft.EntityFrameworkCore;
 
 namespace EduAnalytics.DataAccess.Seed;
 
@@ -13,12 +14,35 @@ public static class DbInitializer
 {
     private static readonly bool ResetDatabaseOnStartup = false;
 
+    /// <summary>
+    /// Uygulamanın kitapçık sayfa düzeni tutan başka bir sürümüyle oluşturulmuş veritabanlarında
+    /// ExamBookletQuestions tablosunda bu sürümün modelinde olmayan PositionX / PositionY sütunları
+    /// varsayılan değersiz ve NOT NULL durumdadır. Bu sürüm onlara değer yazmadığı için sınav oluşturma,
+    /// sınava soru ekleme ve kitapçık üretme "Cannot insert the value NULL into column 'PositionX'"
+    /// hatasıyla başarısız oluyordu. Sütunlar varsa ve varsayılanları yoksa 0 varsayılanı eklenir;
+    /// bu sürümle oluşturulmuş veritabanında sütunlar olmadığından hiçbir şey yapılmaz.
+    /// </summary>
+    private const string LegacyBookletLayoutDefaultsSql = """
+        IF COL_LENGTH(N'dbo.ExamBookletQuestions', N'PositionX') IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM sys.default_constraints
+                           WHERE parent_object_id = OBJECT_ID(N'dbo.ExamBookletQuestions')
+                             AND parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'dbo.ExamBookletQuestions'), N'PositionX', 'ColumnId'))
+            ALTER TABLE dbo.ExamBookletQuestions ADD CONSTRAINT DF_ExamBookletQuestions_PositionX DEFAULT 0 FOR PositionX;
+
+        IF COL_LENGTH(N'dbo.ExamBookletQuestions', N'PositionY') IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM sys.default_constraints
+                           WHERE parent_object_id = OBJECT_ID(N'dbo.ExamBookletQuestions')
+                             AND parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'dbo.ExamBookletQuestions'), N'PositionY', 'ColumnId'))
+            ALTER TABLE dbo.ExamBookletQuestions ADD CONSTRAINT DF_ExamBookletQuestions_PositionY DEFAULT 0 FOR PositionY;
+        """;
+
     public static void Seed(EduAnalyticsDbContext context)
     {
         if (ResetDatabaseOnStartup)
             context.Database.EnsureDeleted();
 
         context.Database.EnsureCreated();
+        EnsureLegacyBookletLayoutDefaults(context);
 
         if (context.Exams.Any())
             return;
@@ -227,6 +251,19 @@ public static class DbInitializer
         var answers = BuildAnswers(exam.Id, booklet.Id, students, questions);
         context.StudentAnswers.AddRange(answers);
         context.SaveChanges();
+    }
+
+    private static void EnsureLegacyBookletLayoutDefaults(EduAnalyticsDbContext context)
+    {
+        try
+        {
+            context.Database.ExecuteSqlRaw(LegacyBookletLayoutDefaultsSql);
+        }
+        catch (Exception ex)
+        {
+            // Uyumluluk adımı açılışı engellememeli; başarısız olursa yalnızca kitapçık ekleme etkilenir.
+            System.Diagnostics.Trace.TraceWarning($"ExamBookletQuestions varsayılan değer onarımı uygulanamadı: {ex.Message}");
+        }
     }
 
     private static TopicLearningOutcome LinkTopicLo(Topic topic, LearningOutcome outcome) => new()

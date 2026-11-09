@@ -4,10 +4,54 @@
              xmlns:vm="clr-namespace:EduAnalytics.UI.ViewModels"
              xmlns:views="clr-namespace:EduAnalytics.UI.Views"
              xmlns:ctl="clr-namespace:EduAnalytics.UI.Controls"
+             xmlns:mi="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
              d:DataContext="{d:DesignInstance Type=vm:ProgramOutcomeReportViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+
+    <UserControl.Resources>
+        <!-- PÇ kartı başlığı: tıklanınca bağlı ÖÇ listesini açar/kapatır (akordeon) -->
+        <Style x:Key="AccordionHeaderStyle" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="bd"
+                                Background="Transparent"
+                                CornerRadius="{DynamicResource RadiusLg}"
+                                Padding="8,6"
+                                Margin="-8,-6">
+                            <ContentPresenter HorizontalAlignment="Stretch"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SubtleHoverBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Aşağı/yukarı ok: kart açıkken yukarı bakar -->
+        <Style x:Key="AccordionChevronStyle" TargetType="mi:MaterialIcon">
+            <Setter Property="Kind" Value="ChevronDown"/>
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Foreground" Value="{DynamicResource SubtleBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=ToggleButton}}" Value="True">
+                    <Setter Property="Kind" Value="ChevronUp"/>
+                    <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
 
     <Grid Style="{StaticResource PageRootGridStyle}">
         <Grid.RowDefinitions>
@@ -54,10 +98,14 @@
                     <DataTemplate>
                         <Border Style="{StaticResource BentoCardStyle}">
                             <StackPanel>
-                                <Grid Margin="0,0,0,14">
+                                <ToggleButton x:Name="PcToggle"
+                                              Style="{StaticResource AccordionHeaderStyle}"
+                                              ToolTip="Bağlı öğrenim çıktılarını göster/gizle">
+                                <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
 
@@ -91,9 +139,16 @@
                                                    Text="GENEL BAŞARI"
                                                    HorizontalAlignment="Right"/>
                                     </StackPanel>
-                                </Grid>
 
-                                <Border Style="{StaticResource CardSubtleStyle}">
+                                    <mi:MaterialIcon Grid.Column="3"
+                                                     Style="{StaticResource AccordionChevronStyle}"
+                                                     Margin="16,0,0,0"/>
+                                </Grid>
+                                </ToggleButton>
+
+                                <Border Style="{StaticResource CardSubtleStyle}"
+                                        Margin="0,14,0,0"
+                                        Visibility="{Binding IsChecked, ElementName=PcToggle, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel>
                                         <TextBlock Text="Bağlı Öğrenim Çıktıları"
                                                    FontWeight="SemiBold"

@@ -7,7 +7,8 @@ using Sdcb.PaddleOCR.Models.Local;
 namespace EduAnalytics.Ocr.Reading;
 
 /// <summary>
-/// PaddleOCR sarmalayıcısı: formun ad-soyad ve öğrenci no alanlarındaki el yazısını okur.
+/// PaddleOCR sarmalayıcısı: sınav kâğıdının ad-soyad alanındaki el yazısını okur (yalnızca yardımcı bilgi;
+/// numara ve puanlar gömülü rakam modeliyle okunur).
 /// Modeller ilk kullanımda yüklenir (birkaç saniye) ve süreç boyunca bellekte kalır;
 /// bu yüzden bu sınıf uygulamada singleton yaşamalıdır. PaddleOcr nesneleri thread-safe
 /// olmadığı için tüm çağrılar tek kilit altında serileştirilir.
@@ -16,7 +17,6 @@ public sealed class PaddleTextReader : IDisposable
 {
     private readonly object _gate = new();
     private readonly Lazy<PaddleOcrAll> _fullOcr;
-    private readonly Lazy<PaddleOcrRecognizer> _recognizer;
 
     public PaddleTextReader()
     {
@@ -28,9 +28,6 @@ public sealed class PaddleTextReader : IDisposable
             AllowRotateDetection = false,
             Enable180Classification = false
         });
-
-        _recognizer = new Lazy<PaddleOcrRecognizer>(
-            () => new PaddleOcrRecognizer(model.RecognizationModel, PaddleDevice.Mkldnn()));
     }
 
     /// <summary>
@@ -58,24 +55,6 @@ public sealed class PaddleTextReader : IDisposable
         }
     }
 
-    /// <summary>
-    /// Tek karakterlik kutucuk (öğrenci no hücresi): tespit adımı atlanır,
-    /// doğrudan tanıma çalıştırılır. Dönen metinden ilk harf/rakam alınır.
-    /// </summary>
-    public (char? Character, double Confidence) ReadCellCharacter(Mat cellGray)
-    {
-        using var prepared = PrepareForOcr(cellGray);
-
-        lock (_gate)
-        {
-            PaddleOcrRecognizerResult result = _recognizer.Value.Run(prepared);
-            var ch = result.Text?.FirstOrDefault(char.IsLetterOrDigit);
-            return ch is null or '\0'
-                ? (null, 0)
-                : (char.ToUpperInvariant(ch.Value), result.Score);
-        }
-    }
-
     /// <summary>Küçük kırpıntıları 2× büyütüp BGR'a çevirir; PaddleOCR küçük görüntüde zayıftır.</summary>
     private static Mat PrepareForOcr(Mat gray)
     {
@@ -97,7 +76,5 @@ public sealed class PaddleTextReader : IDisposable
     {
         if (_fullOcr.IsValueCreated)
             _fullOcr.Value.Dispose();
-        if (_recognizer.IsValueCreated)
-            _recognizer.Value.Dispose();
     }
 }

@@ -118,8 +118,11 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void NavigateToMyCourses()
     {
-        CurrentView = _services.GetRequiredService<MyCoursesViewModel>();
+        DetachCurrentView();
         ActiveMenu = "MyCourses";
+        var vm = _services.GetRequiredService<MyCoursesViewModel>();
+        _ = vm.LoadAsync();
+        CurrentView = vm;
     }
 
     [RelayCommand]

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    El yazısı rakam modelini (src/EduAnalytics.Ocr/Recognition/digits-cnn.bin) yeniden eğiten araç.
+    Uygulamanın çalışması için gerekmez; ayrıntılar README.md'de.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EduAnalytics.Ocr\EduAnalytics.Ocr.csproj" />
+  </ItemGroup>
+
+</Project>

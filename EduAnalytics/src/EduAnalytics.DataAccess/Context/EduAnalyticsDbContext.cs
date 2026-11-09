@@ -41,6 +41,37 @@ public class EduAnalyticsDbContext : DbContext
     public DbSet<QuestionRubricCriterion> QuestionRubricCriteria { get; set; } = null!;
     public DbSet<StudentAnswerCriterion> StudentAnswerCriteria { get; set; } = null!;
 
+    // Servisler bir ekran açık kaldığı sürece aynı context'i kullanır. Kayıt başarısız olunca (çok adımlı
+    // işlemlerde transaction da geri alınır) izlenen varlıklar context'te kalıyor ve aynı ekrandan yapılan
+    // sonraki denemeyi bozuyordu: ör. "Sınavı Oluştur" ikinci denemede geri alınmış kitapçığa bağlı kayıtları
+    // yeniden yazmaya çalışıp yabancı anahtar hatası veriyordu. Hata durumunda izleyici temizlenir; sonraki
+    // işlem veritabanının gerçek durumuyla başlar.
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        try
+        {
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        catch
+        {
+            ChangeTracker.Clear();
+            throw;
+        }
+    }
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch
+        {
+            ChangeTracker.Clear();
+            throw;
+        }
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -26,6 +26,15 @@ public partial class MyCoursesViewModel : ObservableObject
     [ObservableProperty]
     private string? _errorMessage;
 
+    // Arama: soldaki ders listesi ve sağdaki öğrenci tablosu için anlık filtre
+    private static readonly System.Globalization.CompareInfo TurkishCompare =
+        System.Globalization.CultureInfo.GetCultureInfo("tr-TR").CompareInfo;
+
+    [ObservableProperty] private string _courseSearchText = string.Empty;
+    [ObservableProperty] private string _studentSearchText = string.Empty;
+    [ObservableProperty] private ObservableCollection<MyCourseDetailDto> _filteredCourses = new();
+    [ObservableProperty] private ObservableCollection<StudentDto> _filteredStudents = new();
+
     public MyCoursesViewModel(IMyCoursesService service)
     {
         _service = service;
@@ -34,6 +43,39 @@ public partial class MyCoursesViewModel : ObservableObject
     partial void OnSelectedCourseChanged(MyCourseDetailDto? value)
     {
         OnPropertyChanged(nameof(IsCourseSelected));
+        ApplyStudentFilter();
+    }
+
+    partial void OnCourseSearchTextChanged(string value) => ApplyCourseFilter();
+    partial void OnStudentSearchTextChanged(string value) => ApplyStudentFilter();
+
+    private static bool Matches(string? source, string query) =>
+        !string.IsNullOrEmpty(source) &&
+        TurkishCompare.IndexOf(source, query, System.Globalization.CompareOptions.IgnoreCase) >= 0;
+
+    /// <summary>Dersleri adına veya koduna göre süzer; seçili ders gizlenirse ilk eşleşen seçilir.</summary>
+    private void ApplyCourseFilter()
+    {
+        var query = CourseSearchText?.Trim() ?? string.Empty;
+        var list = query.Length == 0
+            ? Courses.ToList()
+            : Courses.Where(c => Matches(c.CourseName, query) || Matches(c.CourseCode, query)).ToList();
+
+        var keep = SelectedCourse;
+        FilteredCourses = new ObservableCollection<MyCourseDetailDto>(list);
+        SelectedCourse = keep != null && list.Contains(keep) ? keep : list.FirstOrDefault();
+    }
+
+    /// <summary>Seçili dersin öğrencilerini numara, ad soyad veya sınıf/şubeye göre süzer.</summary>
+    private void ApplyStudentFilter()
+    {
+        var students = SelectedCourse?.EnrolledStudents ?? new List<StudentDto>();
+        var query = StudentSearchText?.Trim() ?? string.Empty;
+        var list = query.Length == 0
+            ? students
+            : students.Where(s => Matches(s.StudentNumber, query) || Matches(s.FullName, query) || Matches(s.ClassName, query)).ToList();
+
+        FilteredStudents = new ObservableCollection<StudentDto>(list);
     }
 
     public async Task LoadAsync()
@@ -44,10 +86,7 @@ public partial class MyCoursesViewModel : ObservableObject
         {
             var list = await _service.GetMyCoursesAsync();
             Courses = new ObservableCollection<MyCourseDetailDto>(list);
-            if (Courses.Any())
-            {
-                SelectedCourse = Courses.First();
-            }
+            ApplyCourseFilter();
         }
         catch (Exception ex)
         {
