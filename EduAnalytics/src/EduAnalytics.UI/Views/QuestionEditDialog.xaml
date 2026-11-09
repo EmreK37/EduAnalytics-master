@@ -143,7 +143,7 @@
                         <!-- Rubrik ölçütleri: klasik soruyu ölçüt ölçüt puanlamak için -->
                         <TextBlock Text="Rubrik Ölçütleri" Style="{StaticResource SubheadingStyle}" Margin="0,18,0,0"/>
                         <TextBlock Text="Cevap ekranındaki &quot;Not&quot; düğmesiyle öğrenciyi ölçüt ölçüt puanlamak için ölçüt ekleyin. Ölçüt puanlarının toplamı sorunun puanına eşit olmalı. Öğrencilerin puanlandığı bir ölçüt silinemez; başlığı ve puanı değiştirilebilir."
-                                   Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="0,-6,0,10"/>
+                                   Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="0,2,0,10"/>
 
                         <Grid Margin="0,0,0,4" Visibility="{Binding RubricCriteria.Count, Converter={StaticResource BoolToVisibility}}">
                             <Grid.ColumnDefinitions>

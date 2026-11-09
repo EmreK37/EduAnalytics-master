@@ -81,7 +81,7 @@ public partial class AnswerEntryView : UserControl
             Header = "Numara",
             Binding = new Binding("StudentNumber"),
             IsReadOnly = true,
-            Width = new DataGridLength(115),
+            Width = new DataGridLength(124),
             CellStyle = MakeCellStyle(bold: true, backgroundResourceKey: "CardSubtleBgBrush")
         });
 

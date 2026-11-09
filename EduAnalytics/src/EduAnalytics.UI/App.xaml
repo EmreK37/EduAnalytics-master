@@ -1288,7 +1288,9 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="ProgressBar">
                             <Grid>
-                                <Border CornerRadius="3"
+                                <!-- PART_Track olmadan ProgressBar dolgunun genişliğini hesaplamaz (çubuk boş görünür). -->
+                                <Border x:Name="PART_Track"
+                                        CornerRadius="3"
                                         Background="{TemplateBinding Background}"/>
                                 <Border x:Name="PART_Indicator"
                                         CornerRadius="3"
