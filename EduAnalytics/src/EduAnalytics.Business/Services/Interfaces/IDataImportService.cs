@@ -4,5 +4,9 @@ namespace EduAnalytics.Business.Services.Interfaces;
 
 public interface IDataImportService
 {
-    Task<(int CoursesAdded, int StudentsAdded, int TopicsAdded, int QuestionsAdded)> ImportAdminPackageAsync(AdminExportPackageDto package);
+    /// <summary>
+    /// .edudata paketini içe aktarır. Var olan kayıtlar (aynı kod / numara / başlık) yeniden eklenmez;
+    /// paket birden çok kez yüklenebilir.
+    /// </summary>
+    Task<DataImportResult> ImportAdminPackageAsync(AdminExportPackageDto package);
 }

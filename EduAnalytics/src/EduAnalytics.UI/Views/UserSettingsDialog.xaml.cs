@@ -171,7 +171,29 @@ public partial class UserSettingsDialog : Window
 
             StatusBorder.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DCFCE7"));
             StatusText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#16A34A"));
-            StatusText.Text = $"{package.Institution} paketinden {result.CoursesAdded} ders, {result.StudentsAdded} öğrenci, {result.TopicsAdded} konu ve {result.QuestionsAdded} soru başarıyla içe aktarıldı.";
+
+            var parts = new List<string>();
+            void Add(int count, string label) { if (count > 0) parts.Add($"{count} {label}"); }
+            Add(result.ProgramsAdded, "program");
+            Add(result.CoursesAdded, "ders");
+            Add(result.StudentsAdded, "öğrenci");
+            Add(result.EnrollmentsAdded, "ders kaydı");
+            Add(result.TopicsAdded, "konu");
+            Add(result.LearningOutcomesAdded, "ÖÇ");
+            Add(result.ProgramOutcomesAdded, "PÇ");
+            Add(result.OutcomeMappingsAdded, "ÖÇ–PÇ eşleşmesi");
+            Add(result.QuestionsAdded, "soru");
+            Add(result.ExamsAdded, "sınav");
+            Add(result.AnswersAdded, "cevap");
+
+            var summary = parts.Count > 0
+                ? $"{package.Institution} paketinden içe aktarıldı: {string.Join(", ", parts)}."
+                : $"{package.Institution} paketindeki kayıtların hepsi zaten veritabanında; yeni kayıt eklenmedi.";
+            if (result.ExamsSkipped > 0)
+                summary += $" {result.ExamsSkipped} sınav zaten var olduğu için atlandı.";
+            if (result.Warnings.Count > 0)
+                summary += "\n" + string.Join("\n", result.Warnings);
+            StatusText.Text = summary;
         }
         catch (Exception ex)
         {

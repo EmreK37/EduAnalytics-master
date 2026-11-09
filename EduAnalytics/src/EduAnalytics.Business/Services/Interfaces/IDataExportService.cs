@@ -4,5 +4,11 @@ namespace EduAnalytics.Business.Services.Interfaces;
 
 public interface IDataExportService
 {
-    Task<AdminExportPackageDto> ExportDatabaseAsync();
+    /// <summary>
+    /// Veritabanını .edudata paketine dönüştürür (sürüm 2.0).
+    /// </summary>
+    /// <param name="includeExamResults">
+    /// Sınavlar, kitapçıklar, öğrenci cevapları ve rubrik puanları da eklensin mi? Bunlar kişisel veridir.
+    /// </param>
+    Task<AdminExportPackageDto> ExportDatabaseAsync(bool includeExamResults = true);
 }

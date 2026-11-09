@@ -7,9 +7,15 @@
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="600">
             <mi:MaterialIcon Kind="DatabaseExport" Width="80" Height="80" Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,24"/>
             <TextBlock Text="Sistem Veritabanı Paketleme (Admin Merkezi)" FontSize="26" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" TextAlignment="Center" Margin="0,0,0,16"/>
-            <TextBlock Text="Bu ekran sadece sistem yöneticilerine görünür. Buradan sistemdeki tüm dersleri, konuları, soru bankasını, öğrencileri ve sınav şablonlarını tek bir şifreli pakete dönüştürebilirsiniz. Elde edilen .edudata dosyasını öğretmenlerinize dağıtarak sistemlerini tek tıklamayla hazır hale getirmelerini sağlayabilirsiniz." 
-                       FontSize="15" Foreground="{DynamicResource TextSecondaryBrush}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,40"/>
-            
+            <TextBlock Text="Bu ekran sadece sistem yöneticilerine görünür. Buradan programları, dersleri, öğrencileri ve ders kayıtlarını, konuları, öğrenme çıktılarını (ÖÇ), program çıktılarını (PÇ) ve eşleşmelerini, soru bankasını ve isterseniz sınavları ve öğrenci cevaplarını tek bir .edudata paketine dönüştürebilirsiniz. Paketi başka bir bilgisayarda Ayarlar penceresinden içe aktarabilirsiniz."
+                       FontSize="15" Foreground="{DynamicResource TextSecondaryBrush}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,24"/>
+
+            <CheckBox IsChecked="{Binding IncludeExamResults}" HorizontalAlignment="Center" Margin="0,0,0,8">
+                <TextBlock Text="Sınavları, öğrenci cevaplarını ve rubrik puanlarını da ekle" FontSize="14"/>
+            </CheckBox>
+            <TextBlock Text="Paket şifrelenmez. Öğrenci cevapları kişisel veridir; bu seçenekle oluşturulan paketi yalnızca yetkili kişilerle paylaşın."
+                       FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,28"/>
+
             <Button Content="Tüm Veritabanını Dışa Aktar (.edudata)"
                     Command="{Binding ExportDataCommand}"
                     Style="{StaticResource PrimaryButtonStyle}"
