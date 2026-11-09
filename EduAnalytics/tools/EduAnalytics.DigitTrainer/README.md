@@ -40,4 +40,6 @@ yeniden eğitir. Uygulamanın çalışması için **gerekmez**. Eğitilmiş mode
 - **Sınama:** MNIST sınama kümesi (10 bin) ve `SyntheticHandwriting` ile çizilmiş 3000 rakam. Bu üretici örnek
   kâğıtlarda kullanılır ve eğitime **girmez**; bağımsız bir sınamadır.
 
-Son eğitim (12 tur): MNIST sınama %99,29, sentetik el yazısı %100.
+Son eğitim (12 tur): MNIST sınama %99,29, sentetik el yazısıyla çizilmiş 3000 tek rakamda %100. Kâğıt üzerindeki
+uçtan uca okumada (kutu bulma ve normalleştirme dahil) yeni tohumlarla 960 haneden 958'i doğru okundu; bkz.
+`src/EduAnalytics.Ocr/README.md`.

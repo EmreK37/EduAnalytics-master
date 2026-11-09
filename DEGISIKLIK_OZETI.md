@@ -1,7 +1,85 @@
 # EduAnalytics — Değişiklik Özeti
 
-**Tarih:** 10 Ekim 2026 (son güncelleme: 16 Ekim 2026)
-**Durum:** Proje derleniyor ve uygulama açılıyor. Sınav oluşturmayı engelleyen veritabanı şeması sorunu 15 Ekim'de çözüldü. Optik Okuma, resmi sınav kâğıdı ve el yazısı puan okumayla yenilendi (16 Ekim). "Açık konular" bölümünde kararlar ve gerçek kâğıtla pilot bekliyor.
+**Tarih:** 10 Ekim 2026 (son güncelleme: 9 Kasım 2026)
+**Durum:** Proje derleniyor ve uygulama açılıyor. Sınav oluşturmayı engelleyen veritabanı şeması sorunu 15 Ekim'de çözüldü. Optik Okuma, resmi sınav kâğıdı ve el yazısı puan okumayla yenilendi (16 Ekim). 9 Kasım'da analiz hesaplarındaki hatalar düzeltildi, optik okumaya öğretmen onayı eklendi ve şema migration'lara geçti (bkz. ilk bölüm). "Açık konular" bölümünde kararlar ve gerçek kâğıtla pilot bekliyor.
+
+---
+
+## 9 Kasım 2026 güncellemesi
+
+4 Kasım'da tespit edilen eksikler düzeltildi. Güvenlik konuları bilerek bu güncellemeye alınmadı (aşağıda). Ayrıntılar
+commit mesajlarında.
+
+### Hesaplama düzeltmeleri
+- **Boş bırakılan cevaplar artık kaybolmuyor.**
+  - Sınava giren öğrencinin boş bıraktığı test sorusu "boş" ve 0 puan olarak kaydedilir.
+  - Satırı tamamen boş öğrenci sınava girmemiş sayılır. Hiçbir soruyu cevaplamadan kâğıt veren öğrenci için Cevap
+    Girişi'ndeki **Boş kâğıt** kutusu işaretlenir. Optik okumada kâğıdı okunan her öğrenci sınava girmiş sayılır.
+  - Satırı boşaltılan öğrencinin eski cevapları silinir; kayıttan önce sorulur.
+  - Klasik soruda puan girilmemişse o soru öğrenci için "değerlendirilmemiş" sayılır.
+- **ÖÇ başarısı tek formülle hesaplanıyor.** Sınıf ve öğrenci raporu test ve klasik soruları birlikte, kazanılan puan /
+  alınabilecek puan olarak hesaplar. Zayıflık eşiği her yerde %60'tır ve tek yerden değiştirilir
+  (`ScoringRules.WeakSuccessThreshold`). Önceden sınıf raporu yalnız test sorularını ve %60'ı, öğrenci raporu bütün
+  soruları ve %50'yi kullanıyordu.
+- **PÇ raporu.** PÇ başarısı, bağlı ÖÇ başarılarının katkı düzeyiyle (1–5) ağırlıklı ortalamasıdır. İptal edilen sorular
+  düşülür, pasif hâle getirilmiş soruların geçmiş sınav verisi sayılır, verisi olmayan ÖÇ ve PÇ "veri yok" gösterilir.
+- **Öğrenci profili** sınava özgü soru puanını kullanır, iptal edilen soruları saymaz ve puanı "x / tam puan" gösterir.
+- **Rubrik.**
+  - Puan elle ya da optik okumayla değişirse eski kriter dökümü silinir; elle girişte kayıttan önce sorulur.
+  - Rubrikle puanlamak için ölçüt toplamı sorunun o sınavdaki puanına eşit olmalıdır.
+- **Sınav analizi.**
+  - "Madde Riski" kartı doğru renkleniyor, aynı madde iki kez sayılmıyor ve cevapsız sınavda risk gösterilmiyor.
+  - Cronbach α bütün maddeleri aynı öğrenci kümesiyle hesaplıyor.
+  - Oran çubukları boş görünüyordu (şablonda `PART_Track` eksikti); p ve D çubukları ise hep kırmızıydı.
+
+### Yeni özellikler
+- **Optik okumada kutu kutu öğretmen onayı.**
+  - Belirsiz ya da okunamayan, boş klasik ve optikle uyuşmayan puan kutusu sarı işaretlenir. Öğretmen değeri düzeltir
+    ya da "Onayla" ile onaylar.
+  - Numarası kesin eşleşmeyen kâğıtta "Eşleşmeyi onayla" gerekir.
+  - Onay bekleyen kâğıt kaydedilmez. Kaç kutunun onaylanıp kaçının düzeltildiği günlüğe yazılır.
+- **Klasik sorularda madde analizi.** p = ortalama puan / tam puan; D = üst ve alt %27 grubun puan farkı / tam puan.
+  Gruplar artık sınavın toplam puanına (test + klasik) göre ayrılır.
+- **Rubrik ölçütü tanımlama:** Soru Bankası → soruyu düzenle → "Rubrik Ölçütleri". Puanlanmış bir ölçüt silinemez ama
+  yeniden adlandırılabilir.
+- **Konu başarısı:** Sınav Analizi → Öğrenim Çıktıları sekmesinin altında.
+- **.edudata 2.0.**
+  - Paket programları, ders kayıtlarını, ÖÇ/PÇ ve eşleşmelerini, sınavları, kitapçıkları, cevapları ve rubrik
+    puanlarını taşır. Sınav verisi isteğe bağlıdır.
+  - İçe aktarma artık her öğrenciyi her derse kaydetmiyor; yalnızca paketteki kayıtlar eklenir.
+  - Eski (1.0) paketler okunur. Birden çok ders içeriyorlarsa öğrenciler derslere kaydedilmez ve uyarı verilir.
+  - Paket şifreli değildir; cevap içeren paketi yalnızca yetkili kişilerle paylaşın.
+
+### Veritabanı
+- Şema artık EF Core migration'larıyla yönetiliyor (`EduAnalytics.DataAccess/Migrations`); açılışta `Migrate()` çalışır.
+- EnsureCreated ile kurulmuş eski veritabanlarında migration geçmişi oluşturulur ve ilk migration uygulanmış sayılır.
+  Şema ve veri değişmez.
+- Yeni bir şema değişikliği için:
+
+  ```
+  dotnet ef migrations add <Ad> --project src/EduAnalytics.DataAccess --startup-project src/EduAnalytics.DataAccess
+  ```
+
+### Nasıl doğrulandı
+- 27 Business testi (17'si yeni) ve 30 Ocr testi geçiyor.
+- Gerçek veritabanının anonimleştirilmiş kopyasında:
+  - Boş cevap senaryosunda N=3, p=0,333, ortalama %58,3 çıktı. Önceden N=1, p=1 ve %87,5 çıkıyordu.
+  - Profil ve sıralama puanı aynı.
+  - İptal edilen soru artık PÇ sonucunu da değiştiriyor.
+  - PÇ oranları katkı düzeyine göre ayrışıyor. Önceden 15 PÇ'nin hepsi %62,5 görünüyordu.
+  - Onay bekleyen optik kâğıt kaydedilmedi; onaylandıktan sonra kaydedildi.
+  - Kopya .edudata paketine alınıp boş bir veritabanına aktarıldı. Cevap, kriter puanı, ders kaydı ve eşleşme sayıları ile
+    sınav ortalaması aynı çıktı; ikinci yükleme kopya oluşturmadı.
+- Migration ile sıfırdan kurulan şema, EnsureCreated şemasıyla birebir aynı. Gerçek veritabanının kopyasında şema ve
+  satır sayıları değişmedi.
+- Değişen ekranlar anonim veriyle ekran dışında çizilip kontrol edildi.
+
+### Bilerek dokunulmayanlar
+- **Güvenlik:** giriş ekranındaki sabit kodlu yönetici girişi ve yerel parolanın saklanma biçimi. Ayrı bir çalışmada
+  ele alınmalı.
+- **Gerçek kâğıtla pilot** yapılmadı (bkz. 5. bölüm).
+- **`SampleOptics/`** klasörü depoya alınmıyor (`.gitignore`). İçindeki kâğıtlar veritabanındaki öğrencilerin ad ve
+  numaralarını taşıyor.
 
 ---
 
@@ -195,8 +273,10 @@ Mevcut 11 öğrencinin numarası 12 haneli formata çevrildi. Giriş yılı sın
   - **Birim testleri:** 30 test geçti. Kapsam: eğik/gürültülü tarama, ters tarama, devam sayfası, B kitapçığı,
     26 soruluk iki satırlı tablo, boş kutular, çift ve silik işaret, puan değerlendirmesi, olasılıkla öğrenci
     eşleştirme.
-  - **İstatistiksel ölçüm:** Modelin eğitimde görmediği sentetik el yazısıyla 80 kâğıt üretildi. 960 numara hanesi,
-    480 puan kutusu ve 80 Toplam Not'un hepsi doğru okundu.
+  - **İstatistiksel ölçüm:** Modelin eğitimde görmediği sentetik el yazısıyla 80 kâğıt üretildi; bu sabit tohumlu
+    sette 960 numara hanesi, 480 puan kutusu ve 80 Toplam Not'un hepsi doğru okundu. 4 Kasım'da farklı tohumlarla
+    üretilen 80 yeni kâğıtta ise 960 numara hanesinin 958'i, 80 numaranın 78'i, 480 puan kutusunun ve 80 Toplam
+    Not'un hepsi doğru okundu.
   - **Uçtan uca:** Gerçek uygulamanın ekran mantığıyla, veritabanının kopyasında 65 kontrol yapıldı, hepsi geçti.
     - Bilinen değerlerle tek öğrenci; kayıttan sonra test cevapları, doğru/yanlış ve klasik puanlar veritabanında
       doğrulandı.
@@ -208,7 +288,8 @@ Mevcut 11 öğrencinin numarası 12 haneli formata çevrildi. Giriş yılı sın
 **Doğrulanmayanlar** (elle denenmesi gerekiyor)
 - Fareyle yapılan etkileşimler: sohbet penceresini sürükleme, tema anahtarına tıklama ve animasyonu, açılır listeler.
 - Koyu temada diyalog başlık çubuğunun rengi.
-- **Gerçek el yazısı ve gerçek tarayıcı.** Sentetik kâğıtlarda okuma tam isabetli. Gönderilen fotoğraftaki kutusuz,
+- **Gerçek el yazısı ve gerçek tarayıcı.** Sentetik kâğıtlarda okuma neredeyse tam isabetli (yeni tohumlarla 960
+  haneden 958). Gönderilen fotoğraftaki kutusuz,
   küçük ve bitişik yazılmış numarada ise 12 hanenin 8–9'u doğru okundu. Yazdırılmış kâğıt ve gerçek taramayla pilot
   gerekiyor. Pilot adımları için bkz. `EduAnalytics/src/EduAnalytics.Ocr/README.md`.
 
@@ -228,9 +309,10 @@ Mevcut 11 öğrencinin numarası 12 haneli formata çevrildi. Giriş yılı sın
 6. **Eski "Sınav Oluştur" ekranı.** `ExamCreateView` menüden erişilebilir değil; yalnızca puan dağıtımı güncellendi, diğer düzeltmeler uygulanmadı.
 7. **Kurum logosu.** Sınav kâğıdında üniversitenin resmi logosu uygulamayla gelmiyor. "Sınav Kâğıdı Üret" penceresinde
    "Logo Seç…" ile resmi logo dosyası bir kez seçilmeli; seçim hatırlanır.
-8. **Optik okumada gerçek kâğıt pilotu.** Pilot yapılmadı; ayrıntı için bkz. 5. bölüm, "Doğrulanmayanlar". Pilotta
-   belirsiz okunan kutuların oranına göre güven eşiği (`ScoreReading.LowConfidence = 0,6`) ayarlanabilir. Yazıya özgü
-   hatalar görülürse gerçek örneklerle model yeniden eğitilebilir.
+8. **Optik okumada gerçek kâğıt pilotu.** Pilot yapılmadı; ayrıntı için bkz. 5. bölüm, "Doğrulanmayanlar". Belirsiz
+   okunan kutular 9 Kasım'dan beri öğretmen onaylamadan ya da düzeltmeden kaydedilmiyor. Pilotta onay isteyen kutuların
+   oranına göre güven eşiği (`ScoreReading.LowConfidence = 0,6`) ayarlanabilir. Yazıya özgü hatalar görülürse gerçek
+   örneklerle model yeniden eğitilebilir.
 
 ---
 

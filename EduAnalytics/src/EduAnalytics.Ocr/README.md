@@ -151,8 +151,11 @@ Yanlış öğrenciye not yazmaktansa öğretmenin seçmesi tercih edilir. Numara
   - Türkiye'de yaygın yazımlar: ortası çizgili 7, bayraklı ya da tabanlı 1.
 - Ölçüm sonuçları:
   - MNIST sınama kümesinde %99,3.
-  - Modelin eğitimde hiç görmediği sentetik el yazısı üreticisinde (`SyntheticHandwriting`) %100. 80 doldurulmuş
-    kâğıtta 960 numara hanesi, 480 puan kutusu ve 80 Toplam Not'un hepsi doğru okundu.
+  - Modelin eğitimde hiç görmediği sentetik el yazısı üreticisinde (`SyntheticHandwriting`), doldurulmuş kâğıtlar
+    üzerinde uçtan uca:
+    - sabit tohumlu 80 kâğıtlık sette 960 numara hanesi, 480 puan kutusu ve 80 Toplam Not'un hepsi doğru okundu;
+    - farklı tohumlarla üretilen 80 yeni kâğıtta (4 Kasım 2026) 960 numara hanesinin 958'i (%99,8), 80 numaranın 78'i,
+      480 puan kutusunun 480'i ve 80 Toplam Not'un 80'i doğru okundu.
 - Yeniden eğitmek için: `tools/EduAnalytics.DigitTrainer`. MNIST dosyaları ayrıca indirilir.
 
   ```
@@ -165,7 +168,8 @@ Yanlış öğrenciye not yazmaktansa öğretmenin seçmesi tercih edilir. Numara
 > **Gerçek el yazısı hakkında:** Sentetik kâğıtlardaki sonuçlar kodun doğru çalıştığını gösterir. Gerçek el yazısında
 > başarı yazana ve tarama kalitesine bağlıdır. Bir deneme yapıldı: kutusuz, satıra küçük ve bitişik yazılmış gerçek bir
 > numara fotoğrafında 12 hanenin 8–9'u doğru okundu. Kutulu düzen tam bu yüzden seçildi: her kutuya bir rakam ve daha
-> büyük yazı. Belirsiz okumalar zaten işaretlenir. Pilot için aşağıdaki adımları izleyin.
+> büyük yazı. Belirsiz okumalar işaretlenir ve Optik Okuma ekranında öğretmen onaylamadan ya da düzeltmeden kaydedilmez.
+> Pilot için aşağıdaki adımları izleyin.
 
 ## NuGet paketleri
 
