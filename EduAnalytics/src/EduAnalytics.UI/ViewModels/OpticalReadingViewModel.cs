@@ -387,8 +387,10 @@ public partial class OpticalReadingViewModel : ObservableObject
             var unreadable = Sheets.Count(s => !s.MarkersFound);
             var unmatched = Sheets.Count(s => s.MarkersFound && s.SelectedStudent == null);
             var review = Sheets.Count(s => s.Status == SheetStatus.Review);
+            var needsApproval = Sheets.Count(s => s.Status == SheetStatus.NeedsApproval);
             SuccessMessage = $"✓ {added} kâğıt okundu." +
                              (continuation > 0 ? $" {continuation} devam sayfası atlandı (okunacak alan yok)." : "") +
+                             (needsApproval > 0 ? $" {needsApproval} kâğıtta onay bekleyen okuma var (sarı kutular)." : "") +
                              (review > 0 ? $" {review} kâğıtta kontrol edilmesi gereken uyarı var." : "") +
                              (unmatched > 0 ? $" {unmatched} kâğıtta öğrenci elle seçilmeli." : "") +
                              (unreadable > 0 ? $" {unreadable} sayfa sınav kâğıdı olarak tanınamadı." : "");
@@ -476,6 +478,13 @@ public partial class OpticalReadingViewModel : ObservableObject
             AnswersText = answersText,
             TotalText = result.TotalScore?.Text ?? string.Empty
         };
+
+        // Kesin olmayan eşleşme öğretmen onayı ister (ya da listeden doğru öğrencinin seçilmesi).
+        if (studentId != null && kind is MatchKind.FuzzyNumber or MatchKind.NameOnly or MatchKind.PartialNumber)
+        {
+            row.RequiresMatchApproval = true;
+            row.IsMatchApproved = false;
+        }
 
         var layout = ResolveLayout(bookletCode) ?? _layouts[0];
         foreach (var reading in result.Scores.OrderBy(s => s.Position))
@@ -647,10 +656,14 @@ public partial class OpticalReadingViewModel : ObservableObject
             if (!entry.IsMultipleChoice && entry.Value == null && !entry.HasInvalidText)
                 reasons.Add("boş");
 
-            entry.IsFlagged = reasons.Count > 0;
-            entry.FlagReason = reasons.Count > 0
-                ? $"Soru {entry.Number}: {string.Join(", ", reasons)}"
-                : entry.Caption;
+            var flagged = reasons.Count > 0;
+            var reason = flagged ? $"Soru {entry.Number}: {string.Join(", ", reasons)}" : entry.Caption;
+            // Onaylanmış kutuda farklı bir sorun ortaya çıktıysa (ör. kitapçık ya da cevap değişti)
+            // önceki onay bu sorunu kapsamaz; yeniden onay gerekir.
+            if (entry.IsApproved && flagged && entry.IsFlagged && entry.FlagReason != reason)
+                entry.IsApproved = false;
+            entry.IsFlagged = flagged;
+            entry.FlagReason = reason;
         }
 
         if (row.TotalReading is { } totalReading && row.TotalText == totalReading.Text
@@ -958,6 +971,21 @@ public partial class OpticalReadingViewModel : ObservableObject
             return;
         }
 
+        // İnsan onayı: belirsiz okunan kutular ve kesin olmayan öğrenci eşleşmeleri onaylanmadan
+        // (ya da düzeltilmeden) hiçbir kâğıt kaydedilmez.
+        var pending = rows.Where(r => r.HasPendingApprovals).ToList();
+        if (pending.Count > 0)
+        {
+            var pendingReadings = pending.Sum(r => r.PendingApprovalCount);
+            ErrorMessage = $"{pending.Count} kâğıtta onay bekleyen {pendingReadings} okuma var: " +
+                           string.Join(", ", pending.Take(3).Select(r => r.SourceLabel)) +
+                           (pending.Count > 3 ? " …" : "") + ". " +
+                           "Sarı çerçeveli kutuları taranan görüntüyle karşılaştırın: değer doğruysa \"Onayla\"yı " +
+                           "işaretleyin, yanlışsa kutuyu düzeltin. Öğrenci eşleşmesi kesin olmayan kâğıtlarda " +
+                           "\"Eşleşmeyi onayla\"yı işaretleyin ya da listeden doğru öğrenciyi seçin.";
+            return;
+        }
+
         var updates = new List<StudentAnswerUpdate>();
         var classicScores = 0;
         foreach (var row in rows)
@@ -1048,13 +1076,31 @@ public partial class OpticalReadingViewModel : ObservableObject
         IsSaving = true;
         try
         {
-            await _answerEntry.SaveAsync(_model.ExamId, updates);
+            // Kâğıdı okunan her öğrenci sınava girmiştir; her şeyi boş bıraktıysa da 0 puanla kaydedilir.
+            var attended = rows.Select(r => r.SelectedStudent!.StudentId).ToList();
+            var result = await _answerEntry.SaveAsync(_model.ExamId, updates, attended);
             foreach (var row in rows)
             {
                 row.IsSaved = true;
                 _studentsWithAnswers.Add(row.SelectedStudent!.StudentId);
             }
+
+            var entries = rows.SelectMany(r => r.Scores).ToList();
+            var approvedBoxes = entries.Count(e => e.IsFlagged && e.IsApproved);
+            var correctedBoxes = entries.Count(e => e.WasCorrected);
+            var approvedMatches = rows.Count(r => r.RequiresMatchApproval && r.IsMatchApproved);
+            _log.Info("OptikOkuma",
+                $"Kayıt: sınav {_model.ExamId}, {rows.Count} kâğıt, {entries.Count} puan kutusu; " +
+                $"{approvedBoxes} kutu öğretmen onayıyla, {correctedBoxes} kutu düzeltilerek kaydedildi; " +
+                $"{approvedMatches} kesin olmayan eşleşme onaylandı.");
+
             SuccessMessage = $"✓ {rows.Count} öğrencinin cevapları ve puanları kaydedildi; test soruları değerlendirildi. " +
+                             (approvedBoxes + correctedBoxes > 0
+                                 ? $"{approvedBoxes} okuma onaylanarak, {correctedBoxes} okuma düzeltilerek kaydedildi. "
+                                 : "") +
+                             (result.RubricBreakdownsCleared > 0
+                                 ? $"{result.RubricBreakdownsCleared} klasik puanın eski rubrik dökümü yeni puanla uyuşmadığı için silindi. "
+                                 : "") +
                              "Sınav Analizi ekranından sonuçları inceleyebilirsiniz.";
         }
         catch (Exception ex)

@@ -17,6 +17,9 @@
                 <DataTrigger Binding="{Binding Status}" Value="Review">
                     <Setter Property="Background" Value="{DynamicResource WarningSubtleBgBrush}"/>
                 </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="NeedsApproval">
+                    <Setter Property="Background" Value="{DynamicResource WarningSubtleBgBrush}"/>
+                </DataTrigger>
                 <DataTrigger Binding="{Binding Status}" Value="NeedsStudent">
                     <Setter Property="Background" Value="{DynamicResource DangerSubtleBrush}"/>
                 </DataTrigger>
@@ -32,6 +35,9 @@
             <Setter Property="Foreground" Value="{DynamicResource SuccessEmphasisBrush}"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Status}" Value="Review">
+                    <Setter Property="Foreground" Value="{DynamicResource WarningSubtleTextBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="NeedsApproval">
                     <Setter Property="Foreground" Value="{DynamicResource WarningSubtleTextBrush}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Status}" Value="NeedsStudent">
@@ -80,17 +86,27 @@
             <Setter Property="Foreground" Value="{DynamicResource SubtleBrush}"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
         </Style>
-        <!-- "Alınan Not" kutusu: incelenmesi gerekenler (belirsiz, boş, optikle uyuşmayan) amber çerçeveli. -->
+        <!-- "Alınan Not" kutusu: incelenmesi gerekenler (belirsiz, boş, optikle uyuşmayan) amber çerçeveli;
+             öğretmen onayladıysa yeşil. -->
         <Style x:Key="ScoreCellStyle" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}"/>
             <Style.Triggers>
-                <DataTrigger Binding="{Binding IsFlagged}" Value="True">
+                <DataTrigger Binding="{Binding NeedsApproval}" Value="True">
                     <Setter Property="Background" Value="{DynamicResource WarningSubtleBgBrush}"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/>
+                    <Setter Property="BorderThickness" Value="2"/>
                 </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFlagged}" Value="True"/>
+                        <Condition Binding="{Binding IsApproved}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="{DynamicResource SuccessSubtleBgBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource SuccessEmphasisBrush}"/>
+                </MultiDataTrigger>
             </Style.Triggers>
         </Style>
         <Style x:Key="TotalCheckTextStyle" TargetType="TextBlock">
@@ -265,6 +281,11 @@
                                                   DisplayMemberPath="Display"
                                                   IsEnabled="{Binding MarkersFound}"/>
                                         <TextBlock Text="{Binding MatchInfo}" Style="{StaticResource CellCaptionStyle}" Margin="2,3,0,0"/>
+                                        <CheckBox Content="Eşleşmeyi onayla"
+                                                  IsChecked="{Binding IsMatchApproved, UpdateSourceTrigger=PropertyChanged}"
+                                                  Visibility="{Binding RequiresMatchApproval, Converter={StaticResource BoolToVisibility}}"
+                                                  FontSize="11.5" Margin="2,4,0,0"
+                                                  ToolTip="Numara kesin okunamadı. Numara kutularının görüntüsüne bakıp seçili öğrencinin doğru olduğunu onaylayın; yanlışsa listeden doğru öğrenciyi seçin."/>
                                     </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -362,6 +383,12 @@
 
                                         <StackPanel>
                                             <TextBlock Text="Soru Numarası / Alınan Not — taranan tablo ve okunan puanlar" Style="{StaticResource SectionCaptionStyle}"/>
+                                            <TextBlock TextWrapping="Wrap" FontSize="11.5" Margin="0,0,0,6"
+                                                       Foreground="{DynamicResource WarningSubtleTextBrush}"
+                                                       Visibility="{Binding HasPendingApprovals, Converter={StaticResource BoolToVisibility}}">
+                                                <Run Text="{Binding ApprovalText, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                <Run Text=" Sarı kutuları taranan tabloyla karşılaştırın: değer doğruysa Onayla'yı işaretleyin, yanlışsa kutuyu düzeltin. Onay bekleyen kâğıt kaydedilmez."/>
+                                            </TextBlock>
                                             <Border Style="{StaticResource ScanImageFrameStyle}" MaxWidth="1000">
                                                 <Image Source="{Binding ScoreTableImage}" Stretch="Uniform" MaxHeight="150"
                                                        RenderOptions.BitmapScalingMode="HighQuality"
@@ -384,6 +411,11 @@
                                                                          ToolTip="Alınan Not kutusundan okunan puan; gerekirse düzeltin (ör. 7,5). Boş: puan girilmemiş."/>
                                                                 <TextBlock Text="{Binding Caption}" FontSize="10.5" Opacity="0.75"
                                                                            HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                <CheckBox Content="Onayla"
+                                                                          IsChecked="{Binding IsApproved, UpdateSourceTrigger=PropertyChanged}"
+                                                                          Visibility="{Binding IsFlagged, Converter={StaticResource BoolToVisibility}}"
+                                                                          FontSize="10.5" HorizontalAlignment="Center" Margin="0,3,0,0"
+                                                                          ToolTip="Taranan tabloya bakıp okunan değerin doğru olduğunu onaylayın. Değer yanlışsa kutuyu düzeltin; düzeltilen kutu ayrıca onay istemez."/>
                                                             </StackPanel>
                                                         </Border>
                                                     </DataTemplate>

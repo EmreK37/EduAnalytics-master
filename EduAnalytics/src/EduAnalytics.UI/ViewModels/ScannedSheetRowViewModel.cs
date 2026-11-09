@@ -24,6 +24,8 @@ public enum SheetStatus
     Review,
     /// <summary>Öğrenci seçilmeden kaydedilemez.</summary>
     NeedsStudent,
+    /// <summary>Belirsiz okunan kutular ya da kesin olmayan öğrenci eşleşmesi onaylanmadan kaydedilemez.</summary>
+    NeedsApproval,
     /// <summary>Sayfa sınav kâğıdı olarak tanınamadı; kaydedilemez.</summary>
     Unreadable,
     /// <summary>Cevaplar ve puanlar veritabanına kaydedildi.</summary>
@@ -69,8 +71,27 @@ public partial class ScoreEntryViewModel : ObservableObject
     private decimal? _opticalPoints;
 
     /// <summary>İncelenmesi gereken kutu (belirsiz/okunamayan, tabloyla optik uyuşmazlığı, boş klasik).</summary>
-    [ObservableProperty] private bool _isFlagged;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NeedsApproval))]
+    private bool _isFlagged;
+
     [ObservableProperty] private string _flagReason = string.Empty;
+
+    /// <summary>
+    /// Öğretmen kutuyu taranan görüntüyle karşılaştırıp okunan değeri onayladı mı? İşaretli (sarı) kutular
+    /// onaylanmadan ya da düzeltilmeden kâğıt kaydedilemez. Kutudaki değer değişince onay düşer.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NeedsApproval))]
+    private bool _isApproved;
+
+    /// <summary>Kutu işaretli ve henüz onaylanmamış.</summary>
+    public bool NeedsApproval => IsFlagged && !IsApproved;
+
+    /// <summary>Öğretmen okunan değeri değiştirdi mi (düzeltme)?</summary>
+    public bool WasCorrected => Text != ReadText;
+
+    partial void OnTextChanged(string value) => IsApproved = false;
 
     public string Header => Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
@@ -166,10 +187,36 @@ public partial class ScannedSheetRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText))]
     private bool _isSaved;
 
+    /// <summary>
+    /// Öğrenci numarası yaklaşık, kısmen ya da yalnızca ad benzerliğiyle eşleştiyse öğretmen eşleşmeyi
+    /// onaylamalı (ya da listeden doğru öğrenciyi seçmeli).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NeedsMatchApproval))]
+    private bool _requiresMatchApproval;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NeedsMatchApproval))]
+    private bool _isMatchApproved;
+
+    public bool NeedsMatchApproval => RequiresMatchApproval && !IsMatchApproved && SelectedStudent != null;
+
+    /// <summary>Onay bekleyen okuma sayısı: onaylanmamış işaretli kutular + onaylanmamış kesin olmayan eşleşme.</summary>
+    public int PendingApprovalCount => Scores.Count(s => s.NeedsApproval) + (NeedsMatchApproval ? 1 : 0);
+    public bool HasPendingApprovals => PendingApprovalCount > 0;
+
+    public string ApprovalText => PendingApprovalCount switch
+    {
+        0 => string.Empty,
+        1 => "Onay bekleyen 1 okuma var.",
+        var n => $"Onay bekleyen {n} okuma var."
+    };
+
     public SheetStatus Status =>
         !MarkersFound ? SheetStatus.Unreadable
         : IsSaved ? SheetStatus.Saved
         : SelectedStudent == null ? SheetStatus.NeedsStudent
+        : HasPendingApprovals ? SheetStatus.NeedsApproval
         : HasWarnings ? SheetStatus.Review
         : SheetStatus.Ready;
 
@@ -178,13 +225,63 @@ public partial class ScannedSheetRowViewModel : ObservableObject
         SheetStatus.Ready => "Hazır",
         SheetStatus.Review => "Kontrol et",
         SheetStatus.NeedsStudent => "Öğrenci seçin",
+        SheetStatus.NeedsApproval => "Onay bekliyor",
         SheetStatus.Unreadable => "Okunamadı",
         SheetStatus.Saved => "Kaydedildi",
         _ => string.Empty
     };
 
+    public ScannedSheetRowViewModel()
+    {
+        Scores.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems != null)
+            {
+                foreach (ScoreEntryViewModel entry in e.NewItems)
+                    entry.PropertyChanged += OnScoreEntryPropertyChanged;
+            }
+            if (e.OldItems != null)
+            {
+                foreach (ScoreEntryViewModel entry in e.OldItems)
+                    entry.PropertyChanged -= OnScoreEntryPropertyChanged;
+            }
+            RefreshApprovalState();
+        };
+    }
+
+    private void OnScoreEntryPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ScoreEntryViewModel.NeedsApproval))
+            RefreshApprovalState();
+    }
+
+    private void RefreshApprovalState()
+    {
+        OnPropertyChanged(nameof(PendingApprovalCount));
+        OnPropertyChanged(nameof(HasPendingApprovals));
+        OnPropertyChanged(nameof(ApprovalText));
+        OnPropertyChanged(nameof(Status));
+        OnPropertyChanged(nameof(StatusText));
+    }
+
     // Öğretmen satırı düzenlerse önceki "kaydedildi" durumu artık geçerli değildir.
-    partial void OnSelectedStudentChanged(StudentPickItem? value) => IsSaved = false;
+    partial void OnSelectedStudentChanged(StudentPickItem? value)
+    {
+        IsSaved = false;
+        // Öğretmenin listeden yaptığı seçim, eşleşmenin onayı sayılır.
+        IsMatchApproved = true;
+        OnPropertyChanged(nameof(NeedsMatchApproval));
+        RefreshApprovalState();
+    }
+
+    partial void OnRequiresMatchApprovalChanged(bool value) => RefreshApprovalState();
+
+    partial void OnIsMatchApprovedChanged(bool value)
+    {
+        IsSaved = false;
+        RefreshApprovalState();
+    }
+
     partial void OnBookletCodeChanged(string? value) => IsSaved = false;
     partial void OnAnswersTextChanged(string value) => IsSaved = false;
     partial void OnTotalTextChanged(string value) => IsSaved = false;
