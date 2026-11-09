@@ -1,5 +1,7 @@
 using EduAnalytics.Business.Dtos;
+using EduAnalytics.Business.Helpers;
 using EduAnalytics.Business.Services.Interfaces;
+using EduAnalytics.Core.Entities;
 using EduAnalytics.DataAccess.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -56,17 +58,36 @@ public class MyCoursesService : IMyCoursesService
 
         var answers = await _context.StudentAnswers
             .Include(a => a.Exam)
-            .Include(a => a.Question)
             .Where(a => a.StudentId == studentId && a.Exam.CourseId == courseId)
             .ToListAsync();
+
+        // Puan, sınav analizi ve sıralamayla aynı kuralla hesaplanır: sınava özgü tam puan
+        // (OverrideMaxPoints) kullanılır, iptal edilen sorular sayılmaz.
+        var examIds = answers.Select(a => a.ExamId).Distinct().ToList();
+        var examQuestions = await _context.ExamQuestions
+            .Include(eq => eq.Question)
+            .Where(eq => examIds.Contains(eq.ExamId) && !eq.IsCancelled)
+            .ToListAsync();
+
+        var examQuestionByKey = new Dictionary<(int ExamId, int QuestionId), ExamQuestion>();
+        foreach (var eq in examQuestions)
+            examQuestionByKey.TryAdd((eq.ExamId, eq.QuestionId), eq);
+        var maxScoreByExam = examQuestions
+            .GroupBy(eq => eq.ExamId)
+            .ToDictionary(g => g.Key, g => g.Sum(ScoringRules.MaxPoints));
 
         var examsDto = answers.GroupBy(a => a.Exam)
             .Select(g => new StudentExamResultDto
             {
                 ExamName = g.Key.Title,
                 Date = g.Key.ExamDate,
-                Score = g.Sum(a => a.Score ?? (a.IsCorrect ? a.Question.MaxPoints : 0))
-            }).ToList();
+                Score = g.Sum(a => examQuestionByKey.TryGetValue((a.ExamId, a.QuestionId), out var eq)
+                    ? ScoringRules.Score(eq, a)
+                    : 0m),
+                MaxScore = maxScoreByExam.GetValueOrDefault(g.Key.Id)
+            })
+            .OrderBy(e => e.Date)
+            .ToList();
 
         return new StudentCourseProfileDto
         {

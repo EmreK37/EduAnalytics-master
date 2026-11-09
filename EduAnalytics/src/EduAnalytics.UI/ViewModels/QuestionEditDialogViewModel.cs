@@ -13,7 +13,47 @@ namespace EduAnalytics.UI.ViewModels;
 public partial class QuestionEditDialogViewModel : ObservableObject
 {
     private readonly IQuestionBankService _bankService;
+    private readonly IRubricService _rubricService;
     private QuestionBankCreateModel? _model;
+    private bool _hadCriteria;
+
+    /// <summary>Klasik soru için rubrik (puanlama) ölçütleri.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<RubricCriterionEditRow> RubricCriteria { get; } = new();
+
+    public decimal RubricTotal => RubricCriteria.Sum(c => c.MaxPoints);
+
+    /// <summary>Ölçüt varsa toplamı sorunun puanına eşit olmalı.</summary>
+    public bool RubricTotalMismatch => RubricCriteria.Count > 0 && RubricTotal != MaxPoints;
+
+    public string RubricTotalText => RubricCriteria.Count == 0
+        ? "Ölçüt yok; puan cevap ekranında doğrudan girilir."
+        : RubricTotalMismatch
+            ? $"Ölçüt toplamı {RubricTotal:0.##}, soru puanı {MaxPoints:0.##}: eşit olmalı."
+            : $"Ölçüt toplamı {RubricTotal:0.##} = soru puanı ✓";
+
+    internal void NotifyRubricChanged()
+    {
+        OnPropertyChanged(nameof(RubricTotal));
+        OnPropertyChanged(nameof(RubricTotalMismatch));
+        OnPropertyChanged(nameof(RubricTotalText));
+    }
+
+    partial void OnMaxPointsChanged(decimal value) => NotifyRubricChanged();
+
+    [RelayCommand]
+    private void AddCriterion()
+    {
+        RubricCriteria.Add(new RubricCriterionEditRow(this) { Title = string.Empty, MaxPoints = 0 });
+        NotifyRubricChanged();
+    }
+
+    [RelayCommand]
+    private void RemoveCriterion(RubricCriterionEditRow? row)
+    {
+        if (row == null) return;
+        RubricCriteria.Remove(row);
+        NotifyRubricChanged();
+    }
 
     [ObservableProperty] private int _questionId;
 
@@ -51,9 +91,10 @@ public partial class QuestionEditDialogViewModel : ObservableObject
 
     public event Action<bool>? Closed;
 
-    public QuestionEditDialogViewModel(IQuestionBankService bankService)
+    public QuestionEditDialogViewModel(IQuestionBankService bankService, IRubricService rubricService)
     {
         _bankService = bankService;
+        _rubricService = rubricService;
     }
 
     public async Task LoadAsync(int questionId)
@@ -75,6 +116,20 @@ public partial class QuestionEditDialogViewModel : ObservableObject
         AnswerKey = _model.AnswerKey ?? string.Empty;
         IsActive = _model.IsActive;
         IsFavorite = _model.IsFavorite;
+
+        RubricCriteria.Clear();
+        foreach (var c in await _rubricService.GetCriteriaAsync(questionId))
+        {
+            RubricCriteria.Add(new RubricCriterionEditRow(this)
+            {
+                Id = c.Id,
+                Title = c.Title,
+                MaxPoints = c.MaxPoints,
+                Description = c.Description
+            });
+        }
+        _hadCriteria = RubricCriteria.Count > 0;
+        NotifyRubricChanged();
     }
 
     [RelayCommand]
@@ -116,6 +171,26 @@ public partial class QuestionEditDialogViewModel : ObservableObject
             }
         }
 
+        // Rubrik ölçütleri soru kaydedilmeden önce denetlenir; böylece yarım kayıt oluşmaz.
+        if (IsOpenEnded && RubricCriteria.Count > 0)
+        {
+            if (RubricCriteria.Any(c => string.IsNullOrWhiteSpace(c.Title)))
+            {
+                ErrorMessage = "Her rubrik ölçütünün bir başlığı olmalı.";
+                return;
+            }
+            if (RubricCriteria.Any(c => c.MaxPoints <= 0))
+            {
+                ErrorMessage = "Rubrik ölçüt puanları 0'dan büyük olmalı.";
+                return;
+            }
+            if (RubricTotalMismatch)
+            {
+                ErrorMessage = $"Rubrik ölçüt puanlarının toplamı ({RubricTotal:0.##}) sorunun puanına ({MaxPoints:0.##}) eşit olmalı.";
+                return;
+            }
+        }
+
         var updated = new QuestionBankCreateModel
         {
             CourseId = _model.CourseId,
@@ -140,12 +215,36 @@ public partial class QuestionEditDialogViewModel : ObservableObject
         try
         {
             await _bankService.UpdateAsync(QuestionId, updated);
-            Closed?.Invoke(true);
         }
         catch (Exception ex)
         {
             ErrorMessage = $"Kayıt hatası: {ex.Message}";
+            return;
         }
+
+        // Klasik soruda ölçütler eşitlenir (liste boşsa rubrik kaldırılır). Teste çevrilen sorunun
+        // ölçütlerine dokunulmaz; test sorusunda kullanılmazlar.
+        if (IsOpenEnded && (_hadCriteria || RubricCriteria.Count > 0))
+        {
+            try
+            {
+                await _rubricService.SetCriteriaAsync(QuestionId, RubricCriteria.Select((c, i) => new RubricCriterionCreateModel
+                {
+                    Id = c.Id,
+                    Title = c.Title,
+                    MaxPoints = c.MaxPoints,
+                    Description = c.Description,
+                    Order = i + 1
+                }).ToList());
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Soru kaydedildi ama rubrik ölçütleri kaydedilemedi: {ex.Message}";
+                return;
+            }
+        }
+
+        Closed?.Invoke(true);
     }
 
     [RelayCommand]
@@ -153,4 +252,26 @@ public partial class QuestionEditDialogViewModel : ObservableObject
     {
         Closed?.Invoke(false);
     }
+}
+
+/// <summary>Soru düzenleme penceresindeki tek bir rubrik ölçütü satırı.</summary>
+public partial class RubricCriterionEditRow : ObservableObject
+{
+    private readonly QuestionEditDialogViewModel _parent;
+
+    public RubricCriterionEditRow(QuestionEditDialogViewModel parent)
+    {
+        _parent = parent;
+    }
+
+    /// <summary>Var olan ölçütün Id'si (puanlanmış ölçütler korunur); yeni ölçütte null.</summary>
+    public int? Id { get; init; }
+
+    /// <summary>Notlandırma rehberi; bu pencerede düzenlenmez, olduğu gibi korunur.</summary>
+    public string? Description { get; init; }
+
+    [ObservableProperty] private string _title = string.Empty;
+    [ObservableProperty] private decimal _maxPoints;
+
+    partial void OnMaxPointsChanged(decimal value) => _parent.NotifyRubricChanged();
 }

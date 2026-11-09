@@ -1,6 +1,6 @@
 ﻿using EduAnalytics.Business.Dtos;
+using EduAnalytics.Business.Helpers;
 using EduAnalytics.Business.Services.Interfaces;
-using EduAnalytics.Core.Enums;
 using EduAnalytics.DataAccess.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,13 +15,15 @@ public class LearningOutcomePerformanceService : ILearningOutcomePerformanceServ
         _context = context;
     }
 
+    /// <summary>
+    /// Sınavdaki her ÖÇ'nün sınıf başarısı: ÖÇ'yü ölçen sorulardan kazanılan puan / alınabilecek puan.
+    /// Test ve klasik sorular birlikte sayılır; iptal edilen sorular ve puanı girilmemiş klasik cevaplar
+    /// hesaba girmez. Öğrenci raporundaki ÖÇ hesabı da aynı kuralı kullanır (<see cref="ScoreTally"/>).
+    /// </summary>
     public async Task<List<LearningOutcomePerformanceDto>> AnalyzeExamAsync(int examId)
     {
-        // Sadece test sorularını analiz et (klasik için manuel puan, çıktı bağlamı farklı)
         var examQuestions = await _context.ExamQuestions
-            .Where(eq => eq.ExamId == examId
-                      && !eq.IsCancelled
-                      && eq.Question.Type == QuestionType.MultipleChoice)
+            .Where(eq => eq.ExamId == examId && !eq.IsCancelled)
             .Include(eq => eq.Question)
                 .ThenInclude(q => q.QuestionLearningOutcomes)
                     .ThenInclude(qlo => qlo.LearningOutcome)
@@ -47,14 +49,15 @@ public class LearningOutcomePerformanceService : ILearningOutcomePerformanceServ
                 .Where(eq => eq.Question.QuestionLearningOutcomes.Any(qlo => qlo.LearningOutcomeId == outcome.Id))
                 .ToList();
 
-            var relatedAnswers = relatedEqs
-                .SelectMany(eq => answerLookup[eq.QuestionId])
-                .ToList();
+            var tally = new ScoreTally();
+            foreach (var eq in relatedEqs)
+            {
+                foreach (var a in answerLookup[eq.QuestionId])
+                    tally.Add(eq, a);
+            }
 
-            if (relatedAnswers.Count == 0) continue;
-
-            int correctCount = relatedAnswers.Count(a => a.IsCorrect);
-            double successRate = (double)correctCount / relatedAnswers.Count * 100;
+            if (tally.Rate is not double successRate)
+                continue;
 
             result.Add(new LearningOutcomePerformanceDto
             {
@@ -62,8 +65,10 @@ public class LearningOutcomePerformanceService : ILearningOutcomePerformanceServ
                 OutcomeName = $"{outcome.Code} — {outcome.Name}",
                 Description = outcome.Description,
                 RelatedQuestionCount = relatedEqs.Count,
-                TotalAnswers = relatedAnswers.Count,
-                CorrectAnswers = correctCount,
+                TotalAnswers = tally.Answers,
+                CorrectAnswers = tally.Correct,
+                EarnedPoints = tally.Earned,
+                PossiblePoints = tally.Possible,
                 SuccessRate = successRate
             });
         }

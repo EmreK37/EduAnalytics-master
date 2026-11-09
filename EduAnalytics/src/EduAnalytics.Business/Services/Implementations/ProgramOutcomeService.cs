@@ -1,7 +1,7 @@
 ﻿using EduAnalytics.Business.Dtos;
+using EduAnalytics.Business.Helpers;
 using EduAnalytics.Business.Services.Interfaces;
 using EduAnalytics.Core.Entities;
-using EduAnalytics.Core.Enums;
 using EduAnalytics.DataAccess.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -80,25 +80,31 @@ public class ProgramOutcomeService : IProgramOutcomeService
         await _context.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// PÇ başarı raporu.
+    /// <list type="bullet">
+    /// <item>ÖÇ başarısı = ÖÇ'yü ölçen sorulardan, iptal edilmemiş bütün sınavlarda kazanılan puan /
+    /// alınabilecek puan. Test ve klasik sorular birlikte sayılır (sınav analizindeki ÖÇ hesabıyla aynı).</item>
+    /// <item>PÇ başarısı = bağlı ÖÇ başarılarının katkı düzeyiyle (1–5) ağırlıklı ortalaması:
+    /// Σ(ÖÇ başarısı × katkı) / Σ katkı. Henüz verisi olmayan ÖÇ'ler ortalamaya girmez.</item>
+    /// </list>
+    /// </summary>
     public async Task<List<ProgramOutcomeReportDto>> GenerateReportAsync(int programId)
     {
-        // Bu programa ait tüm PÇ'leri ve onlara bağlı ÖÇ'leri çek
         var programOutcomes = await _context.ProgramOutcomes
+            .AsNoTracking()
             .Include(po => po.Mappings)
                 .ThenInclude(m => m.LearningOutcome)
                     .ThenInclude(lo => lo.Course)
-            .Include(po => po.Mappings)
-                .ThenInclude(m => m.LearningOutcome)
-                    .ThenInclude(lo => lo.QuestionLearningOutcomes)
-                        .ThenInclude(ql => ql.Question)
-                            .ThenInclude(q => q.ExamQuestions)
-            .Include(po => po.Mappings)
-                .ThenInclude(m => m.LearningOutcome)
-                    .ThenInclude(lo => lo.QuestionLearningOutcomes)
-                        .ThenInclude(ql => ql.Question)
-                            .ThenInclude(q => q.StudentAnswers)
             .Where(po => po.ProgramId == programId)
             .ToListAsync();
+
+        var learningOutcomeIds = programOutcomes
+            .SelectMany(po => po.Mappings)
+            .Select(m => m.LearningOutcomeId)
+            .Distinct()
+            .ToList();
+        var outcomeStats = await ComputeOutcomeStatsAsync(learningOutcomeIds);
 
         var reports = new List<ProgramOutcomeReportDto>();
 
@@ -111,25 +117,17 @@ public class ProgramOutcomeService : IProgramOutcomeService
                 ProgramOutcomeDescription = po.Description
             };
 
-            int totalCorrect = 0;
-            int totalAnswered = 0;
-            int totalQuestions = 0;
+            double weightedSum = 0;
+            int weightTotal = 0;
 
-            foreach (var mapping in po.Mappings)
+            foreach (var mapping in po.Mappings
+                         .OrderBy(m => m.LearningOutcome.Course.Name)
+                         .ThenBy(m => m.LearningOutcome.Code))
             {
                 var lo = mapping.LearningOutcome;
-
-                // Bu ÖÇ'ye bağlı sorular ve test sorularındaki cevap istatistikleri
-                var loQuestions = lo.QuestionLearningOutcomes
-                    .Where(ql => ql.Question.Type == QuestionType.MultipleChoice && ql.Question.IsActive)
-                    .Select(ql => ql.Question)
-                    .ToList();
-
-                var answers = loQuestions.SelectMany(q => q.StudentAnswers).ToList();
-                int loCorrect = answers.Count(a => a.IsCorrect);
-                double loRate = answers.Count > 0
-                    ? (double)loCorrect / answers.Count * 100
-                    : 0;
+                var stats = outcomeStats.GetValueOrDefault(lo.Id) ?? new OutcomeStats();
+                var weight = Math.Clamp(mapping.ContributionLevel, 1, 5);
+                var rate = stats.Tally.Rate;
 
                 report.LinkedLearningOutcomes.Add(new LinkedLearningOutcomeDto
                 {
@@ -137,26 +135,89 @@ public class ProgramOutcomeService : IProgramOutcomeService
                     Code = lo.Code,
                     Name = lo.Name,
                     CourseName = lo.Course.Name,
-                    ContributionLevel = mapping.ContributionLevel,
-                    QuestionCount = loQuestions.Count,
-                    SuccessRate = Math.Round(loRate, 1)
+                    ContributionLevel = weight,
+                    QuestionCount = stats.QuestionCount,
+                    AnswerCount = stats.Tally.Answers,
+                    HasData = rate.HasValue,
+                    SuccessRate = Math.Round(rate ?? 0, 1)
                 });
 
-                totalCorrect += loCorrect;
-                totalAnswered += answers.Count;
-                totalQuestions += loQuestions.Count;
+                report.TotalQuestionCount += stats.QuestionCount;
+                report.TotalAnswerCount += stats.Tally.Answers;
+
+                if (rate is double r)
+                {
+                    weightedSum += r * weight;
+                    weightTotal += weight;
+                }
             }
 
-            report.TotalQuestionCount = totalQuestions;
-            report.TotalAnswerCount = totalAnswered;
-            report.OverallSuccessRate = totalAnswered > 0
-                ? Math.Round((double)totalCorrect / totalAnswered * 100, 1)
-                : 0;
+            report.HasData = weightTotal > 0;
+            report.OverallSuccessRate = weightTotal > 0 ? Math.Round(weightedSum / weightTotal, 1) : 0;
 
             reports.Add(report);
         }
 
         return reports.OrderBy(r => r.ProgramOutcomeCode).ToList();
+    }
+
+    /// <summary>
+    /// Her ÖÇ için: sınavlarda kullanılmış (iptal edilmemiş) soru sayısı ve bütün sınavlardaki puan toplamı.
+    /// Pasif hâle getirilmiş sorular da sayılır; geçmiş sınavlarda gerçekten sorulmuşlardır.
+    /// </summary>
+    private async Task<Dictionary<int, OutcomeStats>> ComputeOutcomeStatsAsync(List<int> learningOutcomeIds)
+    {
+        var links = await _context.QuestionLearningOutcomes
+            .AsNoTracking()
+            .Where(ql => learningOutcomeIds.Contains(ql.LearningOutcomeId))
+            .Select(ql => new { ql.LearningOutcomeId, ql.QuestionId })
+            .ToListAsync();
+
+        var questionIds = links.Select(l => l.QuestionId).Distinct().ToList();
+
+        var examQuestions = await _context.ExamQuestions
+            .AsNoTracking()
+            .Include(eq => eq.Question)
+            .Where(eq => questionIds.Contains(eq.QuestionId) && !eq.IsCancelled)
+            .ToListAsync();
+
+        var examQuestionByKey = new Dictionary<(int ExamId, int QuestionId), ExamQuestion>();
+        foreach (var eq in examQuestions)
+            examQuestionByKey.TryAdd((eq.ExamId, eq.QuestionId), eq);
+        var usedQuestionIds = examQuestions.Select(eq => eq.QuestionId).ToHashSet();
+
+        var answers = await _context.StudentAnswers
+            .AsNoTracking()
+            .Where(sa => questionIds.Contains(sa.QuestionId))
+            .ToListAsync();
+        var answersByQuestion = answers.ToLookup(a => a.QuestionId);
+
+        var result = new Dictionary<int, OutcomeStats>();
+        foreach (var group in links.GroupBy(l => l.LearningOutcomeId))
+        {
+            var stats = new OutcomeStats();
+            foreach (var questionId in group.Select(l => l.QuestionId).Distinct())
+            {
+                if (usedQuestionIds.Contains(questionId))
+                    stats.QuestionCount++;
+
+                foreach (var a in answersByQuestion[questionId])
+                {
+                    // Sorunun iptal edildiği sınavdaki cevaplar sayılmaz.
+                    if (examQuestionByKey.TryGetValue((a.ExamId, a.QuestionId), out var eq))
+                        stats.Tally.Add(eq, a);
+                }
+            }
+            result[group.Key] = stats;
+        }
+
+        return result;
+    }
+
+    private sealed class OutcomeStats
+    {
+        public int QuestionCount { get; set; }
+        public ScoreTally Tally { get; } = new();
     }
 
     public async Task LinkToLearningOutcomeAsync(int programOutcomeId, int learningOutcomeId, int contributionLevel)

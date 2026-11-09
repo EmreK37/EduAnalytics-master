@@ -747,6 +747,78 @@
                                 </ItemsControl>
                             </StackPanel>
                         </Border>
+
+                        <!-- Konu (haftalık plan) başarısı -->
+                        <Border Style="{StaticResource BentoCardStyle}" Margin="0,14,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Konu Başarısı"
+                                           Style="{StaticResource SubheadingStyle}"
+                                           ToolTip="Her konu için: konuya bağlı sorulardan kazanılan puan / alınabilecek puan x 100. Bir soru birden fazla konuya bağlıysa her konuda sayılır."/>
+                                <TextBlock Text="Sorular konulara bağlı değilse bu liste boş kalır. Soruları soru bankasında konularla ilişkilendirebilirsiniz."
+                                           Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="0,-8,0,4"
+                                           Visibility="{Binding HasTopicPerformance, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}"/>
+                                <ItemsControl ItemsSource="{Binding TopicPerformance}" Margin="0,8,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                                    BorderThickness="0,0,0,1"
+                                                    Padding="0,12">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="80"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="80"/>
+                                                        <ColumnDefinition Width="70"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <Border Grid.Column="0"
+                                                            Background="{DynamicResource CardSubtleBgBrush}"
+                                                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="{DynamicResource RadiusLg}"
+                                                            Padding="8,3"
+                                                            HorizontalAlignment="Left"
+                                                            VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding WeekNumber, StringFormat={}{0}. hafta}"
+                                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                   FontSize="11"
+                                                                   FontWeight="SemiBold"/>
+                                                    </Border>
+
+                                                    <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding TopicTitle}"
+                                                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                                                   FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Details}"
+                                                                   FontSize="12"
+                                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Margin="0,2,0,0"/>
+                                                    </StackPanel>
+
+                                                    <ProgressBar Grid.Column="2"
+                                                                 Style="{StaticResource RateBarStyle}"
+                                                                 Value="{Binding SuccessRate, Mode=OneWay}"
+                                                                 Foreground="{Binding SuccessRate, Converter={StaticResource RateThresholdToBrush}, ConverterParameter=outcome}"
+                                                                 Visibility="{Binding HasData, Converter={StaticResource BoolToVisibility}}"
+                                                                 VerticalAlignment="Center"/>
+
+                                                    <TextBlock Grid.Column="3"
+                                                               Text="{Binding SuccessRate, StringFormat={}%{0:N1}}"
+                                                               FontSize="13"
+                                                               FontWeight="Bold"
+                                                               Foreground="{Binding SuccessRate, Converter={StaticResource RateThresholdToBrush}, ConverterParameter=outcomeText}"
+                                                               Visibility="{Binding HasData, Converter={StaticResource BoolToVisibility}}"
+                                                               HorizontalAlignment="Right"
+                                                               VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
             </TabItem>
 
@@ -1304,14 +1376,18 @@
                             <StackPanel>
                                 <TextBlock Text="Madde Analizi Listesi"
                                            Style="{StaticResource SubheadingStyle}"/>
+                                <TextBlock Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="0,-8,0,10"
+                                           Text="Test ve klasik sorular birlikte analiz edilir; üst ve alt %27 gruplar sınavın toplam puanına göre ayrılır. Klasik soruda p = ortalama puan / tam puan, D = üst ve alt grubun ortalama puan farkı / tam puan; Doğru = tam puanın en az yarısını alan öğrenci sayısı. Ayırt edicilik için en az 4 öğrenci gerekir."/>
                                 <DataGrid ItemsSource="{Binding ItemAnalysis}" RowHeight="36">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Soru" Binding="{Binding QuestionNumber}" Width="72"/>
+                                        <DataGridTextColumn Header="Tür" Binding="{Binding TypeLabel}" Width="76"/>
                                         <DataGridTextColumn Header="Doğru Şık" Binding="{Binding CorrectOption}" Width="104"/>
                                         <DataGridTextColumn Header="N" Binding="{Binding TotalStudents}" Width="56"/>
                                         <DataGridTextColumn Header="Doğru" Binding="{Binding CorrectCount}" Width="80"/>
                                         <DataGridTextColumn Header="Yanlış" Binding="{Binding WrongCount}" Width="82"/>
-                                        <DataGridTextColumn Header="Boş" Binding="{Binding EmptyCount}" Width="66"/>
+                                        <DataGridTextColumn Header="Boş" Binding="{Binding EmptyCountDisplay}" Width="66"/>
+                                        <DataGridTextColumn Header="Ort. Puan" Binding="{Binding AverageScoreDisplay}" Width="104"/>
                                         <DataGridTemplateColumn Header="Güçlük (p)" Width="180">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
@@ -1359,7 +1435,7 @@
                                         </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="Ayırt Ed. Düzeyi" Binding="{Binding DiscriminationCategory}" Width="152"/>
                                         <DataGridTextColumn Header="Madde Güv." Binding="{Binding ItemReliabilityIndex, StringFormat=N3}" Width="120"/>
-                                        <DataGridTextColumn Header="Çeldirici Etk." Binding="{Binding DistractorEffectivenessIndex, StringFormat=N2}" Width="128"/>
+                                        <DataGridTextColumn Header="Çeldirici Etk." Binding="{Binding DistractorEffectivenessDisplay}" Width="128"/>
                                         <DataGridTextColumn Header="Üst (Doğru)" Binding="{Binding UpperGroupCorrect}" Width="116"/>
                                         <DataGridTextColumn Header="Alt (Doğru)" Binding="{Binding LowerGroupCorrect}" Width="112"/>
                                     </DataGrid.Columns>

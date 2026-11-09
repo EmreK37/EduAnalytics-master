@@ -139,6 +139,75 @@
                                  MinHeight="80"
                                  VerticalContentAlignment="Top"
                                  VerticalScrollBarVisibility="Auto"/>
+
+                        <!-- Rubrik ölçütleri: klasik soruyu ölçüt ölçüt puanlamak için -->
+                        <TextBlock Text="Rubrik Ölçütleri" Style="{StaticResource SubheadingStyle}" Margin="0,18,0,0"/>
+                        <TextBlock Text="Cevap ekranındaki &quot;Not&quot; düğmesiyle öğrenciyi ölçüt ölçüt puanlamak için ölçüt ekleyin. Ölçüt puanlarının toplamı sorunun puanına eşit olmalı. Öğrencilerin puanlandığı bir ölçüt silinemez; başlığı ve puanı değiştirilebilir."
+                                   Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="0,-6,0,10"/>
+
+                        <Grid Margin="0,0,0,4" Visibility="{Binding RubricCriteria.Count, Converter={StaticResource BoolToVisibility}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="56"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Ölçüt" Style="{StaticResource OptionLabelStyle}"/>
+                            <TextBlock Grid.Column="2" Text="Puan" Style="{StaticResource OptionLabelStyle}" HorizontalAlignment="Center"/>
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding RubricCriteria}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="8"/>
+                                            <ColumnDefinition Width="80"/>
+                                            <ColumnDefinition Width="8"/>
+                                            <ColumnDefinition Width="56"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0"
+                                                 Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="Ölçüt başlığı (ör. Kavram doğruluğu)"/>
+                                        <TextBox Grid.Column="2"
+                                                 Text="{Binding MaxPoints, UpdateSourceTrigger=PropertyChanged}"
+                                                 TextAlignment="Center"
+                                                 ToolTip="Bu ölçütten alınabilecek en yüksek puan"/>
+                                        <Button Grid.Column="4"
+                                                Content="Sil"
+                                                Command="{Binding DataContext.RemoveCriterionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Padding="6,4"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <DockPanel Margin="0,2,0,0">
+                            <Button DockPanel.Dock="Left"
+                                    Content="+ Ölçüt Ekle"
+                                    Command="{Binding AddCriterionCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"/>
+                            <TextBlock Text="{Binding RubricTotalText}"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="12,0,0,0"
+                                       FontSize="12.5">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding RubricTotalMismatch}" Value="True">
+                                                <Setter Property="Foreground" Value="{DynamicResource DangerEmphasisBrush}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DockPanel>
                     </StackPanel>
                 </Border>
 

@@ -16,5 +16,5 @@ public interface ITopicPerformanceService
     /// <summary>
     /// Sadece zayıf konuları döndürür (başarı oranı eşiğin altında).
     /// </summary>
-    Task<List<TopicPerformanceDto>> GetWeakTopicsAsync(int examId, double threshold = 60.0);
+    Task<List<TopicPerformanceDto>> GetWeakTopicsAsync(int examId, double threshold = Helpers.ScoringRules.WeakSuccessThreshold);
 }

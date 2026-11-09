@@ -11,9 +11,18 @@ public class TopicPerformanceDto
     public string? LearningOutcome { get; set; }
 
     public int RelatedQuestionCount { get; set; }     // Bu konuyu ölçen soru sayısı
-    public int TotalAnswers { get; set; }             // Öğrenci_sayısı × ilgili_soru_sayısı
+    public int TotalAnswers { get; set; }             // Puanlanmış cevap sayısı
     public int CorrectAnswers { get; set; }
-    public double SuccessRate { get; set; }           // 0-100
+
+    /// <summary>Puanlanmış cevap var mı? Yoksa başarı oranı gösterilmemeli.</summary>
+    public bool HasData { get; set; }
+
+    public double SuccessRate { get; set; }           // 0-100: kazanılan / alınabilecek puan
+
+    /// <summary>Konu ve ÖÇ satırının alt metni: bağlı ÖÇ'ler ve soru sayısı.</summary>
+    public string Details => (string.IsNullOrWhiteSpace(LearningOutcome) ? "" : $"{LearningOutcome} · ") +
+                             $"{RelatedQuestionCount} soru" +
+                             (HasData ? "" : " · henüz puanlanmış cevap yok");
 
     /// <summary>
     /// Zayıflık seviyesi: 0-40 arası KRİTİK, 40-60 ZAYIF, 60-80 ORTA, 80+ İYİ.

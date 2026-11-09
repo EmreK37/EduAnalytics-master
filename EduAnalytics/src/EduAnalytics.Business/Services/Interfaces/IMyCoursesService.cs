@@ -28,7 +28,16 @@ public class StudentExamResultDto
 {
     public string ExamName { get; set; } = string.Empty;
     public DateTime Date { get; set; }
+
+    /// <summary>Sınav analizi ve sıralamayla aynı kuralla hesaplanan puan (sınava özgü tam puanlarla).</summary>
     public decimal Score { get; set; }
+
+    /// <summary>Sınavın tam puanı (iptal edilen sorular hariç).</summary>
+    public decimal MaxScore { get; set; }
+
+    public string ScoreDisplay => MaxScore > 0
+        ? $"{Score.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} / {MaxScore.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}"
+        : Score.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 }
 
 public interface IMyCoursesService

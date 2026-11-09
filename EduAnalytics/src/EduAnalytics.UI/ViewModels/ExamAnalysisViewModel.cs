@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EduAnalytics.Business.Dtos;
+using EduAnalytics.Business.Helpers;
 using EduAnalytics.Business.Services.Interfaces;
 using EduAnalytics.UI.Services;
 using EduAnalytics.UI.Services.AIAssistant;
@@ -20,6 +21,7 @@ public partial class ExamAnalysisViewModel : ObservableObject, IAIContextProvide
     private readonly IExamBalanceCheckService _balanceService;
     private readonly IExamStatisticsService _statisticsService;
     private readonly IItemAnalysisService _itemAnalysisService;
+    private readonly ITopicPerformanceService _topicService;
     private readonly IThemeService _themeService;
 
     /// <summary>Parent (MainViewModel) bu event'i dinleyerek Cevap Girişi ekranına geçer.</summary>
@@ -29,6 +31,13 @@ public partial class ExamAnalysisViewModel : ObservableObject, IAIContextProvide
 
     [ObservableProperty] private ExamSummaryDto? _summary;
     [ObservableProperty] private ObservableCollection<LearningOutcomePerformanceDto> _learningOutcomes = new();
+
+    /// <summary>Konu (haftalık plan) bazında sınıf başarısı.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTopicPerformance))]
+    private ObservableCollection<TopicPerformanceDto> _topicPerformance = new();
+
+    public bool HasTopicPerformance => TopicPerformance.Count > 0;
     [ObservableProperty] private ObservableCollection<QuestionAnalysisDto> _questions = new();
     [ObservableProperty] private ObservableCollection<QuestionAnalysisDto> _strongDistractors = new();
     [ObservableProperty] private ObservableCollection<StudentPerformanceDto> _students = new();
@@ -115,8 +124,10 @@ public partial class ExamAnalysisViewModel : ObservableObject, IAIContextProvide
         IExamBalanceCheckService balanceService,
         IExamStatisticsService statisticsService,
         IItemAnalysisService itemAnalysisService,
+        ITopicPerformanceService topicService,
         IThemeService themeService)
     {
+        _topicService = topicService;
         _examService = examService;
         _distractorService = distractorService;
         _studentService = studentService;
@@ -168,6 +179,9 @@ public partial class ExamAnalysisViewModel : ObservableObject, IAIContextProvide
 
             var learningOutcomeList = await _learningOutcomeService.AnalyzeExamAsync(examId);
             LearningOutcomes = new ObservableCollection<LearningOutcomePerformanceDto>(learningOutcomeList);
+
+            var topicList = await _topicService.AnalyzeExamAsync(examId);
+            TopicPerformance = new ObservableCollection<TopicPerformanceDto>(topicList);
 
             var questionList = await _distractorService.AnalyzeExamAsync(examId);
             Questions = new ObservableCollection<QuestionAnalysisDto>(questionList);
@@ -336,11 +350,13 @@ public partial class ExamAnalysisViewModel : ObservableObject, IAIContextProvide
             Summary.PassRate = Statistics.PassRate;
         }
 
-        if (items.Count > 0)
-        {
-            Summary.AverageDifficultyIndex = Math.Round(items.Average(i => i.DifficultyIndex), 3);
-            Summary.AverageDiscriminationIndex = Math.Round(items.Average(i => i.DiscriminationIndex), 3);
-        }
+        // Ortalamalar yalnızca hesaplanabilen maddelerden alınır (cevabı olmayan madde 0 sayılmaz).
+        var withData = items.Where(i => i.HasData).ToList();
+        if (withData.Count > 0)
+            Summary.AverageDifficultyIndex = Math.Round(withData.Average(i => i.DifficultyIndex), 3);
+        var withDiscrimination = items.Where(i => i.HasDiscrimination).ToList();
+        if (withDiscrimination.Count > 0)
+            Summary.AverageDiscriminationIndex = Math.Round(withDiscrimination.Average(i => i.DiscriminationIndex), 3);
 
         var lowestOutcome = outcomes.OrderBy(o => o.SuccessRate).FirstOrDefault();
         if (lowestOutcome != null)
@@ -352,12 +368,24 @@ public partial class ExamAnalysisViewModel : ObservableObject, IAIContextProvide
         OnPropertyChanged(nameof(Summary));
     }
 
+    /// <summary>Ayırt edicilik hesaplanabildi ve 0,20'nin altında (Ebel: "zayıf").</summary>
+    private static bool IsLowDiscrimination(ItemAnalysisDto item) =>
+        item.HasDiscrimination && item.DiscriminationIndex < 0.20;
+
+    /// <summary>Madde çok zor (p &lt; 0,25) ya da çok kolay (p &gt; 0,90).</summary>
+    private static bool IsExtremeDifficulty(ItemAnalysisDto item) =>
+        item.HasData && (item.DifficultyIndex < 0.25 || item.DifficultyIndex > 0.90);
+
     private void BuildExecutiveWorkspace()
     {
         var alpha = Statistics?.CronbachAlpha ?? Summary?.CronbachAlpha ?? 0;
-        var lowDiscriminationCount = ItemAnalysis.Count(i => i.DiscriminationIndex < 0.20);
-        var extremeDifficultyCount = ItemAnalysis.Count(i => i.DifficultyIndex < 0.25 || i.DifficultyIndex > 0.90);
-        var weakOutcomeCount = LearningOutcomes.Count(o => o.SuccessRate < 60);
+        // Yalnızca cevabı olan maddeler değerlendirilir; ayırt edicilik ancak hesaplanabildiyse (≥ 4 öğrenci) sayılır.
+        var analyzedItems = ItemAnalysis.Where(i => i.HasData).ToList();
+        var lowDiscriminationCount = analyzedItems.Count(IsLowDiscrimination);
+        var extremeDifficultyCount = analyzedItems.Count(IsExtremeDifficulty);
+        // Her iki sorunu birden taşıyan madde bir kez sayılır.
+        var riskyItemCount = analyzedItems.Count(i => IsLowDiscrimination(i) || IsExtremeDifficulty(i));
+        var weakOutcomeCount = LearningOutcomes.Count(o => o.IsWeak);
         var balanceWarnings = BalanceReport?.Warnings.Count ?? 0;
 
         ExecutiveInsights = new ObservableCollection<AnalysisInsightVm>
@@ -385,14 +413,19 @@ public partial class ExamAnalysisViewModel : ObservableObject, IAIContextProvide
             new()
             {
                 Title = "Madde Riski",
-                Value = (lowDiscriminationCount + extremeDifficultyCount).ToString(),
-                Detail = $"{lowDiscriminationCount} düşük ayırt edicilik, {extremeDifficultyCount} aşırı kolay/zor madde adayı.",
-                Severity = lowDiscriminationCount + extremeDifficultyCount switch
-                {
-                    0 => "Success",
-                    <= 2 => "Warning",
-                    _ => "Critical"
-                }
+                Value = analyzedItems.Count == 0 ? "—" : riskyItemCount.ToString(),
+                Detail = analyzedItems.Count == 0
+                    ? "Henüz cevap girilmediği için madde analizi yapılamadı."
+                    : $"{lowDiscriminationCount} düşük ayırt edicilik, {extremeDifficultyCount} aşırı kolay/zor madde adayı." +
+                      (analyzedItems.Any(i => !i.HasDiscrimination) ? " Ayırt edicilik için en az 4 öğrenci gerekir." : ""),
+                Severity = analyzedItems.Count == 0
+                    ? "Info"
+                    : riskyItemCount switch
+                    {
+                        0 => "Success",
+                        <= 2 => "Warning",
+                        _ => "Critical"
+                    }
             },
             new()
             {
@@ -400,7 +433,7 @@ public partial class ExamAnalysisViewModel : ObservableObject, IAIContextProvide
                 Value = weakOutcomeCount.ToString(),
                 Detail = weakOutcomeCount == 0
                     ? "ÖÇ performansları kritik eşik altında görünmüyor."
-                    : $"{weakOutcomeCount} öğrenim çıktısı %60 altında. Denge uyarısı: {balanceWarnings}.",
+                    : $"{weakOutcomeCount} öğrenim çıktısı %{ScoringRules.WeakSuccessThreshold:0} altında. Denge uyarısı: {balanceWarnings}.",
                 Severity = weakOutcomeCount switch
                 {
                     0 => "Success",
@@ -472,11 +505,13 @@ public partial class ExamAnalysisViewModel : ObservableObject, IAIContextProvide
             lines.Add("En zayıf ÖÇ'ler: " + string.Join("; ", weakOutcomes));
 
         var problematicItems = ItemAnalysis
-            .Where(i => i.DiscriminationIndex < 0.20 || i.DifficultyIndex < 0.25 || i.DifficultyIndex > 0.90)
+            .Where(i => IsLowDiscrimination(i) || IsExtremeDifficulty(i))
             .OrderBy(i => i.DiscriminationIndex)
             .ThenBy(i => Math.Abs(0.55 - i.DifficultyIndex))
             .Take(5)
-            .Select(i => $"Soru {i.QuestionNumber}: p={i.DifficultyIndex:0.###} ({i.DifficultyCategory}), D={i.DiscriminationIndex:0.###} ({i.DiscriminationCategory}), çeldirici={i.DistractorEffectivenessIndex:0.###}")
+            .Select(i => $"Soru {i.QuestionNumber} ({i.TypeLabel.ToLowerInvariant()}): p={i.DifficultyIndex:0.###} ({i.DifficultyCategory}), " +
+                         $"D={i.DiscriminationIndex:0.###} ({i.DiscriminationCategory})" +
+                         (i.IsOpenEnded ? $", ortalama {i.AverageScoreDisplay}" : $", çeldirici={i.DistractorEffectivenessIndex:0.###}"))
             .ToList();
         if (problematicItems.Count > 0)
             lines.Add("Sorunlu madde adayları: " + string.Join("; ", problematicItems));

@@ -123,9 +123,11 @@ public partial class ExamAnalysisViewModel
     private void BuildSuccessRateDoughnut(double avgSuccess, IReadOnlyCollection<ItemAnalysisDto>? items = null)
     {
         var (_, success, _, danger, _, _, _, muted) = ChartColors();
-        var correct = items?.Sum(i => i.CorrectCount) ?? 0;
-        var wrong = items?.Sum(i => i.WrongCount) ?? 0;
-        var empty = items?.Sum(i => i.EmptyCount) ?? 0;
+        // Doğru / yanlış / boş dağılımı test sorularına özgüdür; klasik maddeler bu halkaya girmez.
+        var mcItems = items?.Where(i => !i.IsOpenEnded).ToList();
+        var correct = mcItems?.Sum(i => i.CorrectCount) ?? 0;
+        var wrong = mcItems?.Sum(i => i.WrongCount) ?? 0;
+        var empty = mcItems?.Sum(i => i.EmptyCount) ?? 0;
         var total = correct + wrong + empty;
 
         if (total == 0)
@@ -286,7 +288,13 @@ public partial class ExamAnalysisViewModel
 
     private void BuildAnswerDistributionChart(List<ItemAnalysisDto> items)
     {
-        if (items.Count == 0) return;
+        // Doğru / yanlış / boş dağılımı yalnızca test sorularında anlamlıdır.
+        items = items.Where(i => !i.IsOpenEnded).ToList();
+        if (items.Count == 0)
+        {
+            AnswerDistributionSeries = Array.Empty<ISeries>();
+            return;
+        }
 
         var (_, success, _, danger, _, _, _, muted) = ChartColors();
         AnswerDistributionSeries = new ISeries[]

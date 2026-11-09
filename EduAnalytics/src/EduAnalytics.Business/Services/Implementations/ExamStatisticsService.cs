@@ -188,17 +188,23 @@ public class ExamStatisticsService : IExamStatisticsService
         double varT = totalScores.Sum(x => (x - meanT) * (x - meanT)) / totalScores.Count;
         if (varT == 0) return 0;
 
-        // Madde (soru) puan varyanslarının toplamı
+        // Madde (soru) puan varyanslarının toplamı. Her madde, toplam puanı hesaplanan öğrencilerin
+        // tamamı üzerinden hesaplanır; bir maddede kaydı olmayan öğrencinin o maddeden puanı 0'dır
+        // (toplam puanda da 0 sayıldığı gibi). Böylece α'nın bütün terimleri aynı öğrenci kümesine dayanır.
+        var studentIds = answers.Select(a => a.StudentId).Distinct().ToList();
+        var answerByKey = new Dictionary<(int QuestionId, int StudentId), Core.Entities.StudentAnswer>();
+        foreach (var a in answers)
+            answerByKey.TryAdd((a.QuestionId, a.StudentId), a);
+
         double sumItemVar = 0;
         foreach (var eq in examQuestions)
         {
-            var max = eq.OverrideMaxPoints ?? eq.Question.MaxPoints;
-            var itemScores = answers
-                .Where(a => a.QuestionId == eq.QuestionId)
-                .Select(a => (double)ExamAnalysisService.ComputeScore(eq.Question, a, eq.OverrideMaxPoints))
+            var itemScores = studentIds
+                .Select(id => answerByKey.TryGetValue((eq.QuestionId, id), out var a)
+                    ? (double)ExamAnalysisService.ComputeScore(eq.Question, a, eq.OverrideMaxPoints)
+                    : 0.0)
                 .ToList();
 
-            if (itemScores.Count < 2) continue;
             double m = itemScores.Average();
             double v = itemScores.Sum(x => (x - m) * (x - m)) / itemScores.Count;
             sumItemVar += v;

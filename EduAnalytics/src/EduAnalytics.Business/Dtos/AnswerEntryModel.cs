@@ -56,6 +56,9 @@ public class AnswerEntryCell
 {
     public OptionLetter SelectedOption { get; set; } = OptionLetter.Empty;
     public decimal? Score { get; set; }
+
+    /// <summary>Bu klasik puanın kayıtlı bir rubrik kriter dökümü var mı?</summary>
+    public bool HasRubricBreakdown { get; set; }
 }
 
 public class StudentAnswerUpdate
@@ -66,4 +69,23 @@ public class StudentAnswerUpdate
     public int? BookletId { get; set; }
     public OptionLetter SelectedOption { get; set; }
     public decimal? Score { get; set; }
+}
+
+/// <summary>Cevap kaydının özeti; ekranda öğretmene ne olduğunu anlatmak için.</summary>
+public class AnswerSaveResult
+{
+    /// <summary>Sınava girmiş sayılıp cevapları kaydedilen öğrenci sayısı.</summary>
+    public int StudentsSaved { get; set; }
+
+    /// <summary>Boş olarak kaydedilen test cevabı sayısı (0 puan; madde analizinde "boş").</summary>
+    public int BlankAnswers { get; set; }
+
+    /// <summary>Satırı tamamen boş olduğu için sınava girmemiş sayılan öğrenci sayısı.</summary>
+    public int AbsentStudents { get; set; }
+
+    /// <summary>Önceden cevabı olan ama satırı boşaltıldığı için cevapları silinen öğrenci sayısı.</summary>
+    public int ClearedStudents { get; set; }
+
+    /// <summary>Puanı değiştiği için rubrik kriter dökümü silinen klasik cevap sayısı.</summary>
+    public int RubricBreakdownsCleared { get; set; }
 }

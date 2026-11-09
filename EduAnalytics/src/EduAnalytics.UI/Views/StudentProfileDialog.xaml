@@ -44,7 +44,8 @@
                                             <TextBlock Text="{Binding ExamName}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                             <TextBlock Text="{Binding Date, StringFormat={}{0:dd.MM.yyyy}}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                         </StackPanel>
-                                        <TextBlock Grid.Column="1" Text="{Binding Score}" FontWeight="Bold" FontSize="17" Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding ScoreDisplay}" FontWeight="Bold" FontSize="17" Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center"
+                                                   ToolTip="Sınav analizi ve sıralamayla aynı hesap: sınava özgü soru puanları kullanılır, iptal edilen sorular sayılmaz."/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>

@@ -25,6 +25,12 @@ public partial class RubricGradeDialogViewModel : ObservableObject
     [ObservableProperty] private string? _errorMessage;
     [ObservableProperty] private string? _successMessage;
 
+    /// <summary>Ölçüt yoksa, ölçüt toplamı sınavdaki puanla uyuşmuyorsa ya da var olan puanın üzerine yazılacaksa açıklama.</summary>
+    [ObservableProperty] private string? _infoMessage;
+
+    /// <summary>Rubrikle puanlama yapılabilir mi? (ölçüt var ve toplamı sınavdaki soru puanına eşit)</summary>
+    [ObservableProperty] private bool _canSave;
+
     public event Action? GradeSaved;
 
     public RubricGradeDialogViewModel(IRubricService rubricService)
@@ -57,6 +63,27 @@ public partial class RubricGradeDialogViewModel : ObservableObject
             Rows = new ObservableCollection<RubricGradeRowViewModel>(rows);
             MaxTotalScore = rows.Sum(r => r.MaxPoints);
             RecomputeTotal();
+
+            if (rows.Count == 0)
+            {
+                CanSave = false;
+                InfoMessage = "Bu soru için rubrik ölçütü tanımlanmamış. Soru Bankası'nda soruyu düzenleyip " +
+                              "\"Rubrik Ölçütleri\" bölümünden ölçüt ekleyebilirsiniz. Puanı cevap ekranındaki kutuya " +
+                              "doğrudan da yazabilirsiniz.";
+            }
+            else if (grade.CriteriaTotal != grade.ExamMaxPoints)
+            {
+                CanSave = false;
+                InfoMessage = $"Bu sınavda sorunun puanı {grade.ExamMaxPoints:0.##}, rubrik ölçütlerinin toplamı " +
+                              $"{grade.CriteriaTotal:0.##}. Rubrikle puanlamak için soru puanını ya da ölçüt puanlarını eşitleyin.";
+            }
+            else
+            {
+                CanSave = true;
+                InfoMessage = grade.CurrentScore is decimal current && !grade.HasBreakdown
+                    ? $"Öğrencinin şu anki puanı {current:0.##} (kriter dökümü yok). Kaydederseniz puan, ölçüt puanlarının toplamı olur."
+                    : null;
+            }
         }
         catch (Exception ex)
         {

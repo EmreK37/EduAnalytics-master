@@ -70,6 +70,7 @@ public class AnswerEntryService : IAnswerEntryService
 
         var qIds = exam.ExamQuestions.Select(eq => eq.QuestionId).ToList();
         var answers = await _context.StudentAnswers
+            .Include(sa => sa.CriterionScores)
             .Where(sa => sa.ExamId == examId && qIds.Contains(sa.QuestionId))
             .ToListAsync();
 
@@ -94,7 +95,8 @@ public class AnswerEntryService : IAnswerEntryService
                 row.Answers[a.QuestionId] = new AnswerEntryCell
                 {
                     SelectedOption = a.SelectedOption,
-                    Score = a.Score
+                    Score = a.Score,
+                    HasRubricBreakdown = a.CriterionScores.Count > 0
                 };
             }
 
@@ -104,8 +106,13 @@ public class AnswerEntryService : IAnswerEntryService
         return model;
     }
 
-    public async Task SaveAsync(int examId, List<StudentAnswerUpdate> updates)
+    public async Task<AnswerSaveResult> SaveAsync(
+        int examId,
+        List<StudentAnswerUpdate> updates,
+        IReadOnlyCollection<int>? attendedStudentIds = null)
     {
+        var result = new AnswerSaveResult();
+
         var examQuestions = await _context.ExamQuestions
             .Where(eq => eq.ExamId == examId)
             .Include(eq => eq.Question)
@@ -115,6 +122,7 @@ public class AnswerEntryService : IAnswerEntryService
         var studentIds = updates.Select(u => u.StudentId).Distinct().ToList();
 
         var existing = await _context.StudentAnswers
+            .Include(sa => sa.CriterionScores)
             .Where(sa => sa.ExamId == examId
                       && qIds.Contains(sa.QuestionId)
                       && studentIds.Contains(sa.StudentId))
@@ -135,70 +143,137 @@ public class AnswerEntryService : IAnswerEntryService
             .Select(b => (int?)b.Id)
             .FirstOrDefaultAsync();
 
-        foreach (var u in updates)
+        var attended = attendedStudentIds != null ? new HashSet<int>(attendedStudentIds) : new HashSet<int>();
+
+        foreach (var studentUpdates in updates
+                     .Where(u => examQuestions.ContainsKey(u.QuestionId))
+                     .GroupBy(u => u.StudentId))
         {
-            if (!examQuestions.TryGetValue(u.QuestionId, out var eq))
-                continue;
+            var studentId = studentUpdates.Key;
+            var updatedQuestionIds = studentUpdates.Select(u => u.QuestionId).ToHashSet();
 
-            var max = eq.OverrideMaxPoints ?? eq.Question.MaxPoints;
-            var bookletId = u.BookletId ?? defaultBookletId;
+            // Öğrenci sınava girdi mi? Açıkça bildirildiyse (optik okumada kâğıdı okunan öğrenci),
+            // bu kayıtta dolu bir değeri varsa ya da kayıt dışında kalan sorularda daha önce girilmiş
+            // bir değeri varsa evet. Satırı tamamen boş öğrenci sınava girmemiş sayılır.
+            var tookExam = attended.Contains(studentId)
+                || studentUpdates.Any(u => u.SelectedOption != OptionLetter.Empty || u.Score.HasValue)
+                || existing.Any(sa => sa.StudentId == studentId
+                                   && !updatedQuestionIds.Contains(sa.QuestionId)
+                                   && HasValue(sa));
 
-            // Kitapçıkta şıklar karıştırıldıysa, öğrencinin işaretlediği şıkkı orijinal şıkka çevir
-            var decodedOption = u.SelectedOption;
-            if (eq.Question.Type == QuestionType.MultipleChoice
-                && bookletId.HasValue
-                && shuffleMapLookup.TryGetValue((bookletId.Value, u.QuestionId), out var shuffleMap)
-                && !string.IsNullOrEmpty(shuffleMap))
+            if (!tookExam)
             {
-                decodedOption = _bookletService.DecodeStudentChoice(shuffleMap, u.SelectedOption);
-            }
-
-            var decodedUpdate = new StudentAnswerUpdate
-            {
-                ExamId = examId,
-                QuestionId = u.QuestionId,
-                StudentId = u.StudentId,
-                BookletId = bookletId,
-                SelectedOption = decodedOption,
-                Score = u.Score
-            };
-
-            var isCorrect = CalculateIsCorrect(eq.Question, decodedUpdate, max);
-            var key = (u.QuestionId, u.StudentId);
-
-            if (existingLookup.TryGetValue(key, out var existingAnswer))
-            {
-                existingAnswer.SelectedOption = decodedOption;
-                existingAnswer.Score = u.Score;
-                existingAnswer.IsCorrect = isCorrect;
-                existingAnswer.BookletId = bookletId;
-            }
-            else
-            {
-                if (decodedOption == OptionLetter.Empty && u.Score == null)
-                    continue;
-
-                _context.StudentAnswers.Add(new StudentAnswer
+                // Satırı boşaltılan öğrencinin eski (artık boş) kayıtları silinir; analize girmez.
+                var stale = studentUpdates
+                    .Select(u => existingLookup.GetValueOrDefault((u.QuestionId, studentId)))
+                    .OfType<StudentAnswer>()
+                    .ToList();
+                if (stale.Count > 0)
                 {
-                    ExamId = examId,
-                    QuestionId = u.QuestionId,
-                    StudentId = u.StudentId,
-                    BookletId = bookletId,
-                    SelectedOption = decodedOption,
-                    Score = u.Score,
-                    IsCorrect = isCorrect
-                });
+                    _context.StudentAnswers.RemoveRange(stale);
+                    result.ClearedStudents++;
+                }
+                else
+                {
+                    result.AbsentStudents++;
+                }
+                continue;
+            }
+
+            result.StudentsSaved++;
+
+            foreach (var u in studentUpdates)
+            {
+                var eq = examQuestions[u.QuestionId];
+                var max = eq.OverrideMaxPoints ?? eq.Question.MaxPoints;
+                var bookletId = u.BookletId ?? defaultBookletId;
+                existingLookup.TryGetValue((u.QuestionId, studentId), out var existingAnswer);
+
+                if (eq.Question.Type == QuestionType.OpenEnded)
+                {
+                    if (u.Score is not decimal score)
+                    {
+                        // Puan girilmemiş (ya da silinmiş): soru bu öğrenci için değerlendirilmemiş sayılır.
+                        if (existingAnswer != null)
+                            _context.StudentAnswers.Remove(existingAnswer);
+                        continue;
+                    }
+
+                    var isPassed = score >= max / 2m;
+                    if (existingAnswer != null)
+                    {
+                        // Puan elle ya da optik okumayla değiştiyse eski kriter dökümü artık bu puanı
+                        // açıklamaz; tutarsız kalmaması için silinir.
+                        if (existingAnswer.CriterionScores.Count > 0
+                            && existingAnswer.CriterionScores.Sum(c => c.Score) != score)
+                        {
+                            _context.StudentAnswerCriteria.RemoveRange(existingAnswer.CriterionScores);
+                            result.RubricBreakdownsCleared++;
+                        }
+
+                        existingAnswer.SelectedOption = OptionLetter.Empty;
+                        existingAnswer.Score = score;
+                        existingAnswer.IsCorrect = isPassed;
+                        existingAnswer.BookletId = bookletId;
+                    }
+                    else
+                    {
+                        _context.StudentAnswers.Add(new StudentAnswer
+                        {
+                            ExamId = examId,
+                            QuestionId = u.QuestionId,
+                            StudentId = studentId,
+                            BookletId = bookletId,
+                            SelectedOption = OptionLetter.Empty,
+                            Score = score,
+                            IsCorrect = isPassed
+                        });
+                    }
+                    continue;
+                }
+
+                // Test sorusu. Kitapçıkta şıklar karıştırıldıysa işaretlenen şık orijinal şıkka çevrilir.
+                var decodedOption = u.SelectedOption;
+                if (bookletId.HasValue
+                    && shuffleMapLookup.TryGetValue((bookletId.Value, u.QuestionId), out var shuffleMap)
+                    && !string.IsNullOrEmpty(shuffleMap))
+                {
+                    decodedOption = _bookletService.DecodeStudentChoice(shuffleMap, u.SelectedOption);
+                }
+
+                // Sınava giren öğrencinin boş bıraktığı soru da kaydedilir: madde analizinde "boş",
+                // puanda 0 olarak sayılır.
+                var isCorrect = decodedOption != OptionLetter.Empty && decodedOption == eq.Question.CorrectOption;
+                if (decodedOption == OptionLetter.Empty)
+                    result.BlankAnswers++;
+
+                if (existingAnswer != null)
+                {
+                    existingAnswer.SelectedOption = decodedOption;
+                    existingAnswer.Score = null;
+                    existingAnswer.IsCorrect = isCorrect;
+                    existingAnswer.BookletId = bookletId;
+                }
+                else
+                {
+                    _context.StudentAnswers.Add(new StudentAnswer
+                    {
+                        ExamId = examId,
+                        QuestionId = u.QuestionId,
+                        StudentId = studentId,
+                        BookletId = bookletId,
+                        SelectedOption = decodedOption,
+                        Score = null,
+                        IsCorrect = isCorrect
+                    });
+                }
             }
         }
 
         await _context.SaveChangesAsync();
+        return result;
     }
 
-    private static bool CalculateIsCorrect(Question q, StudentAnswerUpdate u, decimal max)
-    {
-        if (q.Type == QuestionType.MultipleChoice)
-            return u.SelectedOption == q.CorrectOption && u.SelectedOption != OptionLetter.Empty;
-
-        return u.Score.HasValue && u.Score.Value >= max / 2m;
-    }
+    private static bool HasValue(StudentAnswer answer) =>
+        answer.SelectedOption != OptionLetter.Empty || answer.Score.HasValue;
 }

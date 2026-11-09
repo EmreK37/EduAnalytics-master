@@ -20,7 +20,8 @@ public class StudentPerformanceDto
     public int ClassRank { get; set; }                         // Sınıf sıralaması (1 = en yüksek)
 
     /// <summary>
-    /// Bu öğrencinin zayıf olduğu öğrenim çıktıları (başarı oranı %50'nin altında olanlar).
+    /// Bu öğrencinin zayıf olduğu öğrenim çıktıları: başarı oranı ortak eşiğin
+    /// (<see cref="Helpers.ScoringRules.WeakSuccessThreshold"/>, %60) altında olanlar.
     /// </summary>
     public List<string> WeakLearningOutcomes { get; set; } = new();
 

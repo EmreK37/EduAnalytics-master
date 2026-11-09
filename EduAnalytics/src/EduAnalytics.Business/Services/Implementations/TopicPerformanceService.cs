@@ -1,4 +1,5 @@
 ﻿using EduAnalytics.Business.Dtos;
+using EduAnalytics.Business.Helpers;
 using EduAnalytics.Business.Services.Interfaces;
 using EduAnalytics.DataAccess.Context;
 using Microsoft.EntityFrameworkCore;
@@ -49,21 +50,12 @@ public class TopicPerformanceService : ITopicPerformanceService
             var topic = group.First().Topic;
             var topicEqs = group.Select(g => g.ExamQuestion).Distinct().ToList();
 
-            decimal totalEarned = 0;
-            decimal totalMax = 0;
-            int answerCount = 0;
-            int correctCount = 0;
-
+            // ÖÇ başarısıyla aynı kural: kazanılan / alınabilecek puan; puanı girilmemiş klasik cevap sayılmaz.
+            var tally = new ScoreTally();
             foreach (var eq in topicEqs)
             {
-                var max = eq.OverrideMaxPoints ?? eq.Question.MaxPoints;
                 foreach (var a in answerLookup[eq.QuestionId])
-                {
-                    totalEarned += ExamAnalysisService.ComputeScore(eq.Question, a, eq.OverrideMaxPoints);
-                    totalMax += max;
-                    answerCount++;
-                    if (a.IsCorrect) correctCount++;
-                }
+                    tally.Add(eq, a);
             }
 
             // Konunun bağlı olduğu ÖÇ'leri özet metin olarak topla
@@ -78,19 +70,20 @@ public class TopicPerformanceService : ITopicPerformanceService
                 TopicTitle = topic.Title,
                 LearningOutcome = loSummary,
                 RelatedQuestionCount = topicEqs.Count,
-                TotalAnswers = answerCount,
-                CorrectAnswers = correctCount,
-                SuccessRate = totalMax > 0 ? Math.Round((double)(totalEarned / totalMax) * 100, 1) : 0
+                TotalAnswers = tally.Answers,
+                CorrectAnswers = tally.Correct,
+                HasData = tally.Rate.HasValue,
+                SuccessRate = Math.Round(tally.Rate ?? 0, 1)
             });
         }
 
-        return results.OrderBy(t => t.WeekNumber).ToList();
+        return results.OrderBy(t => t.WeekNumber).ThenBy(t => t.TopicTitle).ToList();
     }
 
-    public async Task<List<TopicPerformanceDto>> GetWeakTopicsAsync(int examId, double threshold = 60.0)
+    public async Task<List<TopicPerformanceDto>> GetWeakTopicsAsync(int examId, double threshold = ScoringRules.WeakSuccessThreshold)
     {
         var all = await AnalyzeExamAsync(examId);
-        return all.Where(t => t.SuccessRate < threshold)
+        return all.Where(t => t.HasData && t.SuccessRate < threshold)
                   .OrderBy(t => t.SuccessRate)
                   .ToList();
     }

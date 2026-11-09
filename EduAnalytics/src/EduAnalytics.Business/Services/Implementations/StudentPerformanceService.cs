@@ -1,4 +1,5 @@
 using EduAnalytics.Business.Dtos;
+using EduAnalytics.Business.Helpers;
 using EduAnalytics.Business.Services.Interfaces;
 using EduAnalytics.Core.Enums;
 using EduAnalytics.DataAccess.Context;
@@ -63,26 +64,21 @@ public class StudentPerformanceService : IStudentPerformanceService
                 .SelectMany(eq => eq.Question.QuestionLearningOutcomes.Select(qlo => new { qlo.LearningOutcome, ExamQuestion = eq }))
                 .GroupBy(x => x.LearningOutcome.Id);
 
+            // Sınav analizindeki sınıf ÖÇ hesabıyla aynı kural ve aynı eşik (ScoringRules).
             foreach (var outcomeGroup in outcomeGroups)
             {
                 var outcome = outcomeGroup.First().LearningOutcome;
-                var outcomeEqs = outcomeGroup.Select(x => x.ExamQuestion).Distinct().ToList();
-                var outcomeQuestionIds = outcomeEqs.Select(eq => eq.QuestionId).ToHashSet();
+                var outcomeQuestionIds = outcomeGroup.Select(x => x.ExamQuestion.QuestionId).ToHashSet();
 
-                var relevant = studentAnswers.Where(a => outcomeQuestionIds.Contains(a.QuestionId)).ToList();
-                if (relevant.Count == 0) continue;
-
-                decimal earned = 0;
-                decimal possible = 0;
-                foreach (var a in relevant)
+                var tally = new ScoreTally();
+                foreach (var a in studentAnswers.Where(a => outcomeQuestionIds.Contains(a.QuestionId)))
                 {
-                    if (!examQuestionMap.TryGetValue(a.QuestionId, out var eq)) continue;
-                    earned += ExamAnalysisService.ComputeScore(eq.Question, a, eq.OverrideMaxPoints);
-                    possible += eq.OverrideMaxPoints ?? eq.Question.MaxPoints;
+                    if (examQuestionMap.TryGetValue(a.QuestionId, out var eq))
+                        tally.Add(eq, a);
                 }
 
-                var rate = possible > 0 ? (double)(earned / possible) * 100 : 0;
-                if (rate < 50) weakLearningOutcomes.Add($"{outcome.Code} - {outcome.Name}");
+                if (tally.Rate is double rate && rate < ScoringRules.WeakSuccessThreshold)
+                    weakLearningOutcomes.Add($"{outcome.Code} - {outcome.Name}");
             }
 
             results.Add(new StudentPerformanceDto

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using EduAnalytics.Core.Enums;
+using EduAnalytics.UI.Services;
 using EduAnalytics.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,6 +29,9 @@ public partial class AnswerEntryView : UserControl
         {
             vm.QuestionsLoaded += BuildColumns;
             vm.OpenRubricRequested += OnOpenRubricRequested;
+            vm.ConfirmSave = message => AppMessageBox.Show(
+                message, "Cevapları Kaydet",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
             if (vm.Questions.Any())
                 BuildColumns();
         }
@@ -107,6 +111,24 @@ public partial class AnswerEntryView : UserControl
             };
             AnswersGrid.Columns.Add(bookletCol);
         }
+
+        // Boş kâğıt: sınava girip hiçbir soruyu cevaplamayan öğrenci. İşaretlenmezse boş satır
+        // "sınava girmedi" sayılır ve analize girmez.
+        var blankPaperHeaderStyle = MakeQuestionHeaderStyle();
+        blankPaperHeaderStyle.Setters.Add(new Setter(FrameworkElement.ToolTipProperty,
+            "Öğrenci sınava girdi ama hiçbir soruyu cevaplamadı. İşaretlenirse 0 puanla analize girer; " +
+            "işaretlenmezse boş satır \"sınava girmedi\" sayılır."));
+        AnswersGrid.Columns.Add(new DataGridCheckBoxColumn
+        {
+            Header = "Boş\nkâğıt",
+            Binding = new Binding(nameof(StudentRowViewModel.IsBlankPaper))
+            {
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+            },
+            Width = new DataGridLength(64),
+            CellStyle = MakeCellStyle(),
+            HeaderStyle = blankPaperHeaderStyle
+        });
 
         // Soru sütunları
         var headerStyle = MakeQuestionHeaderStyle();

@@ -1,4 +1,7 @@
-﻿namespace EduAnalytics.Business.Dtos;
+﻿using System.Globalization;
+using EduAnalytics.Core.Enums;
+
+namespace EduAnalytics.Business.Dtos;
 
 /// <summary>
 /// Klasik test geliştirme literatüründeki "madde analizi" çıktısı.
@@ -11,13 +14,43 @@ public class ItemAnalysisDto
     public int QuestionId { get; set; }
     public int QuestionNumber { get; set; }
     public string QuestionText { get; set; } = null!;
+
+    /// <summary>Test sorusunda doğru şık; klasik soruda "—".</summary>
     public string CorrectOption { get; set; } = null!;
 
+    public QuestionType Type { get; set; } = QuestionType.MultipleChoice;
+    public bool IsOpenEnded => Type == QuestionType.OpenEnded;
+
+    /// <summary>Sorunun bu sınavdaki tam puanı.</summary>
+    public decimal MaxPoints { get; set; }
+
+    /// <summary>Klasik soruda ortalama puan (puanı girilmiş cevaplar); test sorusunda null.</summary>
+    public double? AverageScore { get; set; }
+
     // Temel sayılar
-    public int TotalStudents { get; set; }      // Sınava giren öğrenci
-    public int CorrectCount { get; set; }       // Doğru cevap sayısı
-    public int WrongCount { get; set; }         // Yanlış cevap sayısı
-    public int EmptyCount { get; set; }         // Boş bırakanlar
+    public int TotalStudents { get; set; }      // Maddeye puanlanmış cevabı olan öğrenci
+    public int CorrectCount { get; set; }       // Test: doğru. Klasik: tam puanın en az yarısını alan
+    public int WrongCount { get; set; }         // Test: yanlış. Klasik: yarısının altında kalan
+    public int EmptyCount { get; set; }         // Test: boş bırakan. Klasik: 0
+
+    /// <summary>Maddeye puanlanmış en az bir cevap var mı?</summary>
+    public bool HasData => TotalStudents > 0;
+
+    /// <summary>Ayırt edicilik hesaplanabildi mi? (en az 4 öğrenci ve maddeye cevap gerekir)</summary>
+    public bool HasDiscrimination { get; set; }
+
+    // ─── Tablo gösterimi (klasik soruda test'e özgü alanlar "—") ───
+    public string TypeLabel => IsOpenEnded ? "Klasik" : "Test";
+
+    public string AverageScoreDisplay => AverageScore is double avg
+        ? $"{avg.ToString("0.##", CultureInfo.InvariantCulture)} / {MaxPoints.ToString("0.##", CultureInfo.InvariantCulture)}"
+        : "—";
+
+    public string EmptyCountDisplay => IsOpenEnded ? "—" : EmptyCount.ToString(CultureInfo.InvariantCulture);
+
+    public string DistractorEffectivenessDisplay => IsOpenEnded
+        ? "—"
+        : DistractorEffectivenessIndex.ToString("N2", CultureInfo.InvariantCulture);
 
     // ─── Zorluk indeksi (p) ───
     /// <summary>p = doğru / toplam.  0..1 arası, 0=çok zor, 1=çok kolay.</summary>

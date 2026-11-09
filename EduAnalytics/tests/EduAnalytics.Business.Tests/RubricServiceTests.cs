@@ -71,6 +71,7 @@ namespace EduAnalytics.Business.Tests
             var criterion2 = new QuestionRubricCriterion { Id = 2, QuestionId = questionId, Title = "B", MaxPoints = 10 };
 
             _context.Questions.Add(q);
+            _context.ExamQuestions.Add(new ExamQuestion { ExamId = examId, QuestionId = questionId, OrderInExam = 1 });
             _context.QuestionRubricCriteria.AddRange(criterion1, criterion2);
             await _context.SaveChangesAsync();
 

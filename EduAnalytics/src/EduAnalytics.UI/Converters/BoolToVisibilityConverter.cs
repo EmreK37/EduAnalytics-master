@@ -114,6 +114,25 @@ public class RateThresholdToBrushConverter : IValueConverter
         };
 
         var resources = Application.Current.Resources;
+        var kind = parameter as string;
+
+        // Güçlük (p, 0–1): orta güçlük (0,30–0,80) iyi; çok zor ya da çok kolay uçlar zayıf.
+        if (string.Equals(kind, "difficulty", StringComparison.OrdinalIgnoreCase))
+        {
+            if (rate is >= 0.30 and <= 0.80) return resources["SuccessBrush"];
+            if (rate is >= 0.20 and <= 0.90) return resources["WarningBrush"];
+            return resources["DangerBrush"];
+        }
+
+        // Ayırt edicilik (D, −1..1) — Ebel: ≥ 0,30 iyi, 0,20–0,30 düzeltilmeli, < 0,20 zayıf.
+        if (string.Equals(kind, "discrimination", StringComparison.OrdinalIgnoreCase))
+        {
+            if (rate >= 0.30) return resources["SuccessBrush"];
+            if (rate >= 0.20) return resources["WarningBrush"];
+            return resources["DangerBrush"];
+        }
+
+        // Yüzde (0–100) başarı oranları
         if (rate >= 70) return resources["SuccessBrush"];
         if (rate >= 50) return resources["WarningBrush"];
         return resources["DangerBrush"];

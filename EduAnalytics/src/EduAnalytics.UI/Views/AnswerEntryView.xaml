@@ -44,7 +44,9 @@
                 <Run FontWeight="SemiBold" Text="Tab"/>
                 <Run Text=" sağa, "/>
                 <Run FontWeight="SemiBold" Text="Enter"/>
-                <Run Text=" alta geçer. Test soruları için A/B/C/D/Boş, klasik sorular için 0 ile maksimum puan arası sayı girin. Bitince Kaydet butonuna basın."/>
+                <Run Text=" alta geçer. Test soruları için A/B/C/D/Boş, klasik sorular için 0 ile maksimum puan arası sayı girin. Bitince Kaydet butonuna basın. Satırı tamamen boş öğrenci sınava girmemiş sayılır; sınava girip hiçbir soruyu cevaplamayan öğrenci için "/>
+                <Run FontWeight="SemiBold" Text="Boş kâğıt"/>
+                <Run Text=" kutusunu işaretleyin."/>
             </TextBlock>
         </Border>
 

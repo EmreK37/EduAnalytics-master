@@ -341,7 +341,11 @@ public partial class AnswerEntryViewModel : ObservableObject
                     StudentNumber = s.StudentNumber,
                     FullName = s.FullName,
                     BookletCode = s.BookletCode ?? (BookletCount == 1 ? "A" : null),
-                    BookletId = s.BookletId
+                    BookletId = s.BookletId,
+                    HadSavedAnswers = s.Answers.Count > 0,
+                    // Kaydı olup hepsi boş olan öğrenci daha önce "boş kâğıt" olarak kaydedilmiştir.
+                    IsBlankPaper = s.Answers.Count > 0 && s.Answers.Values.All(a =>
+                        a.SelectedOption == Core.Enums.OptionLetter.Empty && a.Score == null)
                 };
 
                 foreach (var q in model.Questions)
@@ -358,6 +362,8 @@ public partial class AnswerEntryViewModel : ObservableObject
                     {
                         cell.SelectedOption = existing.SelectedOption;
                         cell.Score = existing.Score;
+                        cell.OriginalScore = existing.Score;
+                        cell.HasRubricBreakdown = existing.HasRubricBreakdown;
                     }
 
                     row.Cells.Add(cell);
@@ -380,15 +386,55 @@ public partial class AnswerEntryViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Kayıt geri alınamaz bir şey yapacaksa (eski cevapları ya da rubrik dökümünü silmek) View bunu
+    /// kullanıcıya sorar. Null ise sormadan kaydeder.
+    /// </summary>
+    public Func<string, bool>? ConfirmSave { get; set; }
+
     [RelayCommand]
     private async Task SaveAsync()
     {
-        IsSaving = true;
         ErrorMessage = null;
         SuccessMessage = null;
 
+        // Silinecek veriler: satırı tamamen boşaltılan öğrencilerin eski cevapları ve puanı elle
+        // değiştirilen klasik soruların rubrik dökümü. Kaydetmeden önce öğretmene sorulur.
+        var clearedRows = StudentRows
+            .Where(r => r.HadSavedAnswers && !r.IsBlankPaper && r.IsEmptyRow)
+            .ToList();
+        var rubricChanges = StudentRows
+            .SelectMany(r => r.Cells)
+            .Count(c => c.HasRubricBreakdown && c.Score != c.OriginalScore);
+
+        if ((clearedRows.Count > 0 || rubricChanges > 0) && ConfirmSave != null)
+        {
+            var message = new StringBuilder();
+            if (clearedRows.Count > 0)
+            {
+                message.AppendLine($"{clearedRows.Count} öğrencinin satırı boşaltıldı: " +
+                                   string.Join(", ", clearedRows.Take(5).Select(r => r.FullName)) +
+                                   (clearedRows.Count > 5 ? " …" : "") + ".");
+                message.AppendLine("Bu öğrencilerin kayıtlı cevapları silinecek ve sınava girmemiş sayılacaklar. " +
+                                   "Sınava girip hiçbir soruyu cevaplamadılarsa \"Boş kâğıt\" kutusunu işaretleyin.");
+                message.AppendLine();
+            }
+            if (rubricChanges > 0)
+            {
+                message.AppendLine($"{rubricChanges} klasik puan elle değiştirildi. Bu puanların rubrik (kriter) " +
+                                   "dökümü yeni puanla uyuşmayacağı için silinecek.");
+                message.AppendLine();
+            }
+            message.Append("Devam edilsin mi?");
+
+            if (!ConfirmSave(message.ToString()))
+                return;
+        }
+
+        IsSaving = true;
         try
         {
+            var attended = StudentRows.Where(r => r.IsBlankPaper).Select(r => r.StudentId).ToList();
             var updates = StudentRows
                 .SelectMany(r =>
                 {
@@ -410,8 +456,9 @@ public partial class AnswerEntryViewModel : ObservableObject
                 })
                 .ToList();
 
-            await _service.SaveAsync(_examId, updates);
-            SuccessMessage = $"✓ {updates.Count} cevap kaydedildi.";
+            var result = await _service.SaveAsync(_examId, updates, attended);
+            SuccessMessage = $"✓ {result.StudentsSaved} öğrencinin cevapları kaydedildi" +
+                             (result.BlankAnswers > 0 ? $" ({result.BlankAnswers} boş test cevabı dahil)" : "") + ".";
 
             // Kayıt başarılı; analiz ekranına geri dön.
             BackRequested?.Invoke(_examId);

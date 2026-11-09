@@ -1,4 +1,5 @@
 ﻿using EduAnalytics.Business.Dtos;
+using EduAnalytics.Business.Helpers;
 using EduAnalytics.Business.Services.Interfaces;
 using EduAnalytics.Core.Entities;
 using EduAnalytics.Core.Enums;
@@ -33,34 +34,82 @@ public class RubricService : IRubricService
             .ToListAsync();
     }
 
+    /// <summary>
+    /// Sorunun rubrik ölçütlerini verilen listeyle eşitler. Id'si olan ölçüt güncellenir, Id'si olmayan
+    /// eklenir, listede olmayan silinir. Kurallar:
+    /// <list type="bullet">
+    /// <item>Yalnızca klasik sorular için; her ölçütün başlığı olmalı ve puanı 0'dan büyük olmalı.</item>
+    /// <item>Ölçüt puanlarının toplamı sorunun puanına eşit olmalı (liste boşsa rubrik kaldırılır).</item>
+    /// <item>Öğrencilerin puanlandığı bir ölçüt silinemez; puanı verilmiş en yüksek puanın altına düşürülemez.</item>
+    /// </list>
+    /// </summary>
     public async Task SetCriteriaAsync(int questionId, List<RubricCriterionCreateModel> criteria)
     {
+        var question = await _context.Questions.FindAsync(questionId)
+            ?? throw new InvalidOperationException($"Soru bulunamadı: {questionId}");
+        if (question.Type != QuestionType.OpenEnded)
+            throw new InvalidOperationException("Rubrik ölçütleri yalnızca klasik sorular için tanımlanabilir.");
+
+        var cleaned = criteria
+            .Select(c => new
+            {
+                c.Id,
+                Title = c.Title?.Trim() ?? string.Empty,
+                c.MaxPoints,
+                Description = string.IsNullOrWhiteSpace(c.Description) ? null : c.Description.Trim()
+            })
+            .ToList();
+
+        if (cleaned.Any(c => c.Title.Length == 0))
+            throw new ArgumentException("Her ölçütün bir başlığı olmalı.");
+        if (cleaned.Any(c => c.MaxPoints <= 0))
+            throw new ArgumentException("Ölçüt puanları 0'dan büyük olmalı.");
+        var total = cleaned.Sum(c => c.MaxPoints);
+        if (cleaned.Count > 0 && total != question.MaxPoints)
+            throw new ArgumentException(
+                $"Ölçüt puanlarının toplamı ({total:0.##}) sorunun puanına ({question.MaxPoints:0.##}) eşit olmalı.");
+
         var existing = await _context.QuestionRubricCriteria
             .Where(c => c.QuestionId == questionId)
             .ToListAsync();
+        var existingIds = existing.Select(e => e.Id).ToList();
 
-        // Mevcut kriterler bir öğrenci tarafından puanlanmışsa silmeyi engelle
-        var hasScores = await _context.StudentAnswerCriteria
-            .AnyAsync(s => existing.Select(e => e.Id).Contains(s.CriterionId));
+        // Ölçüt başına öğrencilere verilmiş en yüksek puan (puanlanmış ölçütleri korumak için).
+        var highestGiven = await _context.StudentAnswerCriteria
+            .Where(s => existingIds.Contains(s.CriterionId))
+            .GroupBy(s => s.CriterionId)
+            .Select(g => new { CriterionId = g.Key, Highest = g.Max(s => s.Score) })
+            .ToDictionaryAsync(x => x.CriterionId, x => x.Highest);
 
-        if (hasScores && existing.Count > 0)
+        var keptIds = cleaned.Where(c => c.Id.HasValue).Select(c => c.Id!.Value).ToHashSet();
+        var removed = existing.Where(e => !keptIds.Contains(e.Id)).ToList();
+        var removedScored = removed.FirstOrDefault(r => highestGiven.ContainsKey(r.Id));
+        if (removedScored != null)
             throw new InvalidOperationException(
-                "Bu sorunun kriterleri en az bir öğrenci tarafından puanlanmış. Sıfırlama için önce puan kayıtlarını silmek gerekir.");
+                $"\"{removedScored.Title}\" ölçütüyle puanlanmış öğrenciler var; bu ölçüt silinemez. " +
+                "Başlığını, açıklamasını ya da puanını değiştirebilirsiniz.");
 
-        _context.QuestionRubricCriteria.RemoveRange(existing);
-        await _context.SaveChangesAsync();
+        _context.QuestionRubricCriteria.RemoveRange(removed);
 
-        int order = 1;
-        foreach (var c in criteria.OrderBy(x => x.Order))
+        var order = 1;
+        foreach (var c in cleaned)
         {
-            _context.QuestionRubricCriteria.Add(new QuestionRubricCriterion
+            var entity = c.Id.HasValue ? existing.FirstOrDefault(e => e.Id == c.Id.Value) : null;
+            if (entity == null)
             {
-                QuestionId = questionId,
-                Title = c.Title.Trim(),
-                MaxPoints = c.MaxPoints,
-                Order = c.Order > 0 ? c.Order : order++,
-                Description = c.Description?.Trim()
-            });
+                entity = new QuestionRubricCriterion { QuestionId = questionId };
+                _context.QuestionRubricCriteria.Add(entity);
+            }
+            else if (highestGiven.TryGetValue(entity.Id, out var highest) && c.MaxPoints < highest)
+            {
+                throw new InvalidOperationException(
+                    $"\"{c.Title}\" ölçütünde {highest:0.##} puan verilmiş öğrenciler var; ölçüt puanı bunun altına düşürülemez.");
+            }
+
+            entity.Title = c.Title;
+            entity.MaxPoints = c.MaxPoints;
+            entity.Description = c.Description;
+            entity.Order = order++;
         }
 
         await _context.SaveChangesAsync();
@@ -79,11 +128,18 @@ public class RubricService : IRubricService
                                     && sa.QuestionId == questionId
                                     && sa.StudentId == studentId);
 
+        var examQuestion = await _context.ExamQuestions
+            .Include(eq => eq.Question)
+            .FirstOrDefaultAsync(eq => eq.ExamId == examId && eq.QuestionId == questionId);
+
         var dto = new StudentRubricGradeDto
         {
             StudentAnswerId = studentAnswer?.Id ?? 0,
             StudentId = studentId,
-            QuestionId = questionId
+            QuestionId = questionId,
+            ExamMaxPoints = examQuestion != null ? ScoringRules.MaxPoints(examQuestion) : criteria.Sum(c => c.MaxPoints),
+            CurrentScore = studentAnswer?.Score,
+            HasBreakdown = studentAnswer?.CriterionScores.Count > 0
         };
 
         foreach (var c in criteria)
@@ -104,8 +160,32 @@ public class RubricService : IRubricService
 
     public async Task SaveStudentGradeAsync(int examId, int questionId, int studentId, List<CriterionScoreUpdate> updates)
     {
-        var question = await _context.Questions.FindAsync(questionId)
-            ?? throw new InvalidOperationException($"Soru bulunamadı: {questionId}");
+        var examQuestion = await _context.ExamQuestions
+            .Include(eq => eq.Question)
+            .FirstOrDefaultAsync(eq => eq.ExamId == examId && eq.QuestionId == questionId)
+            ?? throw new InvalidOperationException("Soru bu sınavda bulunamadı.");
+
+        var criteria = await _context.QuestionRubricCriteria
+            .Where(c => c.QuestionId == questionId)
+            .ToDictionaryAsync(c => c.Id);
+        if (criteria.Count == 0)
+            throw new InvalidOperationException("Bu soru için rubrik ölçütü tanımlanmamış.");
+
+        // Toplam puan sınavdaki soru puanı ölçeğinde olmalı; değilse kayıt yanlış ölçekte olur.
+        var examMax = ScoringRules.MaxPoints(examQuestion);
+        var criteriaTotal = criteria.Values.Sum(c => c.MaxPoints);
+        if (criteriaTotal != examMax)
+            throw new InvalidOperationException(
+                $"Bu sınavda sorunun puanı {examMax:0.##}, rubrik ölçütlerinin toplamı {criteriaTotal:0.##}. " +
+                "Rubrikle puanlamak için soru puanını ya da ölçüt puanlarını eşitleyin.");
+
+        var valid = updates.Where(u => criteria.ContainsKey(u.CriterionId)).ToList();
+        foreach (var u in valid)
+        {
+            var c = criteria[u.CriterionId];
+            if (u.Score < 0 || u.Score > c.MaxPoints)
+                throw new ArgumentException($"\"{c.Title}\" puanı 0 ile {c.MaxPoints:0.##} arasında olmalı.");
+        }
 
         var studentAnswer = await _context.StudentAnswers
             .Include(sa => sa.CriterionScores)
@@ -113,8 +193,8 @@ public class RubricService : IRubricService
                                     && sa.QuestionId == questionId
                                     && sa.StudentId == studentId);
 
-        // Toplam puan ve doğruluk hesapla
-        var totalScore = updates.Sum(u => u.Score);
+        // Toplam puan ve doğruluk (sınava özgü tam puanın en az yarısı)
+        var totalScore = valid.Sum(u => u.Score);
 
         if (studentAnswer == null)
         {
@@ -125,7 +205,7 @@ public class RubricService : IRubricService
                 StudentId = studentId,
                 SelectedOption = OptionLetter.Empty,
                 Score = totalScore,
-                IsCorrect = totalScore >= question.MaxPoints / 2m
+                IsCorrect = totalScore >= examMax / 2m
             };
             _context.StudentAnswers.Add(studentAnswer);
             await _context.SaveChangesAsync();
@@ -133,7 +213,7 @@ public class RubricService : IRubricService
         else
         {
             studentAnswer.Score = totalScore;
-            studentAnswer.IsCorrect = totalScore >= question.MaxPoints / 2m;
+            studentAnswer.IsCorrect = totalScore >= examMax / 2m;
         }
 
         // Eski kriter puanlarını sil
@@ -141,15 +221,8 @@ public class RubricService : IRubricService
         await _context.SaveChangesAsync();
 
         // Yeni kriter puanlarını ekle
-        var validCriteriaIds = await _context.QuestionRubricCriteria
-            .Where(c => c.QuestionId == questionId)
-            .Select(c => c.Id)
-            .ToHashSetAsync();
-
-        foreach (var u in updates)
+        foreach (var u in valid)
         {
-            if (!validCriteriaIds.Contains(u.CriterionId)) continue;
-
             _context.StudentAnswerCriteria.Add(new StudentAnswerCriterion
             {
                 StudentAnswerId = studentAnswer.Id,

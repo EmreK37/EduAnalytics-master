@@ -131,13 +131,12 @@
                                     <StackPanel Grid.Column="2" HorizontalAlignment="Right">
                                         <TextBlock Style="{StaticResource MetricValueStyle}"
                                                    Foreground="{DynamicResource SuccessBrush}"
-                                                   HorizontalAlignment="Right">
-                                            <Run Text="%"/>
-                                            <Run Text="{Binding OverallSuccessRate}"/>
-                                        </TextBlock>
+                                                   HorizontalAlignment="Right"
+                                                   Text="{Binding OverallSuccessDisplay}"/>
                                         <TextBlock Style="{StaticResource MetricLabelStyle}"
                                                    Text="GENEL BAŞARI"
-                                                   HorizontalAlignment="Right"/>
+                                                   HorizontalAlignment="Right"
+                                                   ToolTip="Bağlı ÖÇ başarılarının katkı düzeyiyle (1–5) ağırlıklı ortalaması. ÖÇ başarısı: iptal edilmemiş bütün sınavlarda ÖÇ'yü ölçen test ve klasik sorulardan kazanılan puan / alınabilecek puan."/>
                                     </StackPanel>
 
                                     <mi:MaterialIcon Grid.Column="3"
@@ -215,10 +214,8 @@
                                                                        FontWeight="Bold"
                                                                        FontSize="13"
                                                                        Foreground="{DynamicResource SuccessBrush}"
-                                                                       HorizontalAlignment="Right">
-                                                                <Run Text="%"/>
-                                                                <Run Text="{Binding SuccessRate}"/>
-                                                            </TextBlock>
+                                                                       HorizontalAlignment="Right"
+                                                                       Text="{Binding SuccessDisplay}"/>
                                                         </Grid>
                                                     </Border>
                                                 </DataTemplate>
