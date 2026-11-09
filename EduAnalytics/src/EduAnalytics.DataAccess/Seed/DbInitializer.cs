@@ -2,6 +2,9 @@
 using EduAnalytics.Core.Enums;
 using EduAnalytics.DataAccess.Context;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace EduAnalytics.DataAccess.Seed;
 
@@ -13,6 +16,48 @@ namespace EduAnalytics.DataAccess.Seed;
 public static class DbInitializer
 {
     private static readonly bool ResetDatabaseOnStartup = false;
+
+    /// <summary>
+    /// Şemayı migration'larla kurar ve günceller (Migrations klasörü; yeni şema değişikliği için
+    /// <c>dotnet ef migrations add &lt;Ad&gt; --project src/EduAnalytics.DataAccess --startup-project src/EduAnalytics.DataAccess</c>).
+    /// <para>
+    /// Bu sürümden önce veritabanı EnsureCreated ile kuruluyordu ve migration geçmişi tutulmuyordu. Böyle bir
+    /// veritabanının şeması ilk migration (InitialCreate) ile aynıdır: geçmiş tablosu oluşturulur ve
+    /// InitialCreate uygulanmış olarak işaretlenir. Bu adım şemaya ve veriye dokunmaz; sonraki migration'lar
+    /// normal şekilde uygulanır.
+    /// </para>
+    /// </summary>
+    public static void MigrateDatabase(EduAnalyticsDbContext context)
+    {
+        // Testlerdeki bellek içi veritabanı migration desteklemez.
+        if (!context.Database.IsRelational())
+        {
+            context.Database.EnsureCreated();
+            return;
+        }
+
+        var creator = context.GetService<IRelationalDatabaseCreator>();
+        if (creator.Exists() && creator.HasTables() && TableExists(context, "Exams"))
+        {
+            var history = context.GetService<IHistoryRepository>();
+            var applied = history.Exists() ? history.GetAppliedMigrations() : Array.Empty<HistoryRow>();
+            if (applied.Count == 0)
+            {
+                var initialMigration = context.Database.GetMigrations().First();
+                context.Database.ExecuteSqlRaw(history.GetCreateIfNotExistsScript());
+                context.Database.ExecuteSqlRaw(history.GetInsertScript(new HistoryRow(initialMigration, ProductInfo.GetVersion())));
+            }
+        }
+
+        context.Database.Migrate();
+    }
+
+    /// <param name="table">Sabit tablo adı (kullanıcı girdisi değildir).</param>
+    private static bool TableExists(EduAnalyticsDbContext context, string table)
+    {
+        var sql = "SELECT CASE WHEN OBJECT_ID(N'dbo." + table + "', N'U') IS NULL THEN 0 ELSE 1 END AS [Value]";
+        return context.Database.SqlQueryRaw<int>(sql).AsEnumerable().Single() == 1;
+    }
 
     /// <summary>
     /// Uygulamanın kitapçık sayfa düzeni tutan başka bir sürümüyle oluşturulmuş veritabanlarında
@@ -41,7 +86,7 @@ public static class DbInitializer
         if (ResetDatabaseOnStartup)
             context.Database.EnsureDeleted();
 
-        context.Database.EnsureCreated();
+        MigrateDatabase(context);
         EnsureLegacyBookletLayoutDefaults(context);
 
         if (context.Exams.Any())
