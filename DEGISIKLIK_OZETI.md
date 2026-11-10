@@ -61,7 +61,7 @@ commit mesajlarında.
   ```
 
 ### Nasıl doğrulandı
-- 27 Business testi (17'si yeni) ve 30 Ocr testi geçiyor.
+- 27 Business testi (18'i yeni) ve 30 Ocr testi geçiyor.
 - Gerçek veritabanının anonimleştirilmiş kopyasında:
   - Boş cevap senaryosunda N=3, p=0,333, ortalama %58,3 çıktı. Önceden N=1, p=1 ve %87,5 çıkıyordu.
   - Profil ve sıralama puanı aynı.
