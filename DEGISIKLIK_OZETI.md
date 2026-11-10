@@ -1,7 +1,58 @@
 # EduAnalytics — Değişiklik Özeti
 
-**Tarih:** 10 Ekim 2026 (son güncelleme: 9 Kasım 2026)
-**Durum:** Proje derleniyor ve uygulama açılıyor. Sınav oluşturmayı engelleyen veritabanı şeması sorunu 15 Ekim'de çözüldü. Optik Okuma, resmi sınav kâğıdı ve el yazısı puan okumayla yenilendi (16 Ekim). 9 Kasım'da analiz hesaplarındaki hatalar düzeltildi, optik okumaya öğretmen onayı eklendi ve şema migration'lara geçti (bkz. ilk bölüm). "Açık konular" bölümünde kararlar ve gerçek kâğıtla pilot bekliyor.
+**Tarih:** 10 Ekim 2026 (son güncelleme: 10 Kasım 2026)
+**Durum:** Proje derleniyor ve uygulama açılıyor. Sınav oluşturmayı engelleyen veritabanı şeması sorunu 15 Ekim'de çözüldü. Optik Okuma, resmi sınav kâğıdı ve el yazısı puan okumayla yenilendi (16 Ekim). 9 Kasım'da analiz hesaplarındaki hatalar düzeltildi, optik okumaya öğretmen onayı eklendi ve şema migration'lara geçti. 10 Kasım'da puan girişindeki virgül/nokta hatası giderildi ve Ana Sayfa gerçek veriye bağlandı (bkz. ilk iki bölüm). "Açık konular" bölümünde kararlar ve gerçek kâğıtla pilot bekliyor.
+
+---
+
+## 10 Kasım 2026 güncellemesi
+
+### Puan girişinde virgül/nokta hatası (önemli)
+Uygulama sayıları okurken bölge ayarına bağlıydı ve aynı ekranda bile farklı yollar farklı kural kullanıyordu. Ölçülen
+sonuçlar:
+
+| Nerede | Girilen | Kaydedilen |
+|---|---|---|
+| Cevap Girişi, klasik puan kutusu | `7,5` | **75** |
+| Cevap Girişi, klasik puan kutusu | `25,5` | **255** |
+| Panodan yapıştır | `7.5` | **75** |
+| Excel İndir → aynı dosyayı Excel Yükle | kayıtlı 26 | **2600** |
+
+Kayıttan önce puanın soru puanını aşıp aşmadığı da denetlenmiyordu. Bu makinedeki veritabanında aralık dışı puan yok
+(10 Kasım'da sayıldı). Başka bilgisayarlarda bu yollarla puan girildiyse kontrol edin.
+
+**Düzeltme:**
+- **Tek kural:** virgül de nokta da ondalık ayırıcıdır, binlik ayırıcı kabul edilmez (`Business/Helpers/DecimalText.cs`).
+  Bütün puan kutuları bu kuralı kullanan `DecimalInputConverter` ile bağlı. Geçersiz giriş kırmızı çerçeveyle
+  reddedilir.
+- **Excel:** puanlar dosyaya sayı hücresi olarak yazılıyor; yüklemede sayı hücresi doğrudan, metin hücresi aynı kuralla
+  okunuyor. Okunamayan hücreler atlanıp sayısı bildiriliyor.
+- **Denetim:** puanı sorunun o sınavdaki puanını aşan kayıt hem Cevap Girişi'nde (öğrenci ve soru adıyla) hem serviste
+  reddediliyor; hiçbir şey yarım kaydedilmiyor.
+- **Görünüm:** bütün ekranlar sayıları bölge ayarıyla yazıyor (Türkçede `25,5`); önceden aynı ekranda hem `0,383` hem
+  `0.50` görünüyordu. Yazarken kutu yeniden biçimlenmiyor (`7,` yazarken virgül kaybolmuyor).
+
+### Ana Sayfa
+- Sabit yazılmış "+2 Yeni", "Yapay Zeka (AI) servisi çevrimiçi", "Veritabanı bağlantısı aktif" ve "Bekleyen 2 analiz
+  raporu" kaldırıldı. Yerlerine gerçek durum geldi:
+  - öğrencilerin dağıldığı sınıf sayısı;
+  - veritabanı yüklemesinin sonucu;
+  - yapay zekâ asistanı için API anahtarının girilip girilmediği;
+  - cevabı girilmemiş sınav sayısı.
+- "Analize hazır" kartı yalnızca cevabı girilmiş sınavları sayıyor. Sınav kartlarındaki rozet sabit "Analiz Bekliyor"
+  yerine "Analize hazır" ya da "Cevap bekliyor" gösteriyor.
+- Genel başarı ortalamasına ve ortalama p/D değerlerine cevapsız sınav ya da madde artık 0 olarak girmiyor.
+
+### Küçük düzeltmeler
+- Optik Okuma'da kaydı durduran "onay bekleyen okuma var" uyarısı, son onay verilince kalkıyor.
+- Ocr projesindeki CA1416 derleme uyarısı giderildi (PDF çizimi desteklenen işletim sistemlerinde çağrılıyor).
+
+### Nasıl doğrulandı
+- 53 Business testi (`DecimalText` için 25 durum, aralık dışı puan için yeni servis testi) ve 30 Ocr testi geçiyor.
+- Gerçek veritabanının anonimleştirilmiş kopyasında, uygulamanın kendi ayarlarıyla:
+  - karakter karakter yazma: `7,5` → 7,5; `7,05` → 7,05; `26,00` → 26; `25.5` → 25,5; `abc` reddedildi;
+  - Cevap Girişi ızgarasındaki gerçek hücrede `7,5` ve `7.5` → 7,5;
+  - Excel hücreleri: sayı 26 → 26; metin `26,00` → 26; metin `7.5` → 7,5.
 
 ---
 
@@ -302,8 +353,10 @@ Mevcut 11 öğrencinin numarası 12 haneli formata çevrildi. Giriş yılı sın
    - **Veritabanı:** Bu iki sütuna `0` varsayılanı eklendi. Mevcut kayıtlar ve düzen verisi korundu.
    - **Açılış adımı (`DbInitializer`):** Uygulama açılışta aynı onarımı kendisi yapıyor. Sütunlar varsa ve varsayılanları yoksa ekleniyor, yoksa hiçbir şey yapılmıyor.
    - **DbContext:** Kayıt başarısız olunca izlenen kayıtlar temizleniyor. Önceden aynı ekrandan yapılan ikinci deneme, geri alınmış kayıtlar yüzünden yabancı anahtar hatası veriyordu.
-2. **Ana Sayfa'da sabit yazılmış veriler.** "+2 Yeni", "Bekleyen 2 analiz raporu", "Yapay Zeka servisi çevrimiçi" ve "Veritabanı bağlantısı aktif" gerçek veriden gelmiyor. Gerçek veriye bağlanacak mı, kaldırılacak mı?
-3. **Ondalık ayırıcı tutarsız.** Aynı ekranda hem "0.383" hem "0,383" görünüyor. Hepsini virgüle çevirmek, puan kutularına "7.5" yazıldığında nasıl okunacağını da değiştirir; bu yüzden dokunulmadı.
+2. **Ana Sayfa'da sabit yazılmış veriler — çözüldü (10 Kasım 2026).** Gerçek veriye bağlandı; bkz. 10 Kasım bölümü.
+3. **Ondalık ayırıcı tutarsız — çözüldü (10 Kasım 2026).** Görünüm bölge ayarına bağlandı; puan kutuları virgülü de
+   noktayı da ondalık ayırıcı sayıyor. Bu iş sırasında "7,5"in 75 kaydedildiği bir veri girişi hatası bulundu ve
+   düzeltildi; bkz. 10 Kasım bölümü.
 4. **Klasik soru filtresi hatası yeniden üretilemedi.** Veritabanındaki klasik sorular servis, ViewModel ve Sınav Oluştur havuzunda Klasik filtresiyle doğru geliyor. Hangi ekranda ve hangi adımlarla olduğu bilinirse devam edilebilir.
 5. **Şablon lisansı.** Cruip şablonu GPL-3.0 lisanslı. Koddan değil yalnızca görsel değerlerden yararlanıldı; proje dağıtılacaksa yine de gözden geçirilmeli.
 6. **Eski "Sınav Oluştur" ekranı.** `ExamCreateView` menüden erişilebilir değil; yalnızca puan dağıtımı güncellendi, diğer düzeltmeler uygulanmadı.
