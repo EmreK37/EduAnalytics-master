@@ -11,6 +11,8 @@ namespace EduAnalytics.UI.Views;
 
 public partial class AnswerEntryView : UserControl
 {
+    private static readonly Converters.DecimalInputConverter DecimalInput = new();
+
     public AnswerEntryView()
     {
         InitializeComponent();
@@ -172,11 +174,11 @@ public partial class AnswerEntryView : UserControl
                 stackFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
 
                 var tbFactory = new FrameworkElementFactory(typeof(TextBox));
+                // "7,5" de "7.5" de 7,5 okunur (WPF'in varsayılan çevirisi "7,5"i 75 yapıyordu).
                 tbFactory.SetBinding(TextBox.TextProperty, new Binding($"Cells[{i}].Score")
                 {
-                    StringFormat = "N1",
-                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
-                    TargetNullValue = string.Empty
+                    Converter = DecimalInput,
+                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
                 });
                 tbFactory.SetValue(FrameworkElement.WidthProperty, 60.0);
                 tbFactory.SetValue(FrameworkElement.HeightProperty, 26.0);

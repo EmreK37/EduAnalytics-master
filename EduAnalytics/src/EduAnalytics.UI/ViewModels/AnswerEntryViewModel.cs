@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EduAnalytics.Business.Dtos;
+using EduAnalytics.Business.Helpers;
 using EduAnalytics.Business.Services.Interfaces;
 using System.Text;
 using System.Windows;
@@ -70,7 +71,7 @@ public partial class AnswerEntryViewModel : ObservableObject
                     }
                     else
                     {
-                        sb.Append($"\t{cell.Score}");
+                        sb.Append($"\t{DecimalText.Format(cell.Score)}");
                     }
                 }
                 sb.AppendLine();
@@ -103,7 +104,8 @@ public partial class AnswerEntryViewModel : ObservableObject
             if (lines.Length == 0) return;
 
             int updateCount = 0;
-            
+            int unreadable = 0;
+
             // İlk satırı başlık olarak varsay, 2. satırdan başla
             // Ancak kullanıcı başlık olmadan kopyaladıysa öğrenci nosundan anlayalım.
             int startIdx = lines[0].Contains("OgrenciNo", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
@@ -144,16 +146,18 @@ public partial class AnswerEntryViewModel : ObservableObject
                     }
                     else
                     {
-                        if (decimal.TryParse(cellVal, out var sc))
+                        // Virgül de nokta da ondalık ayırıcı: "7,5" = "7.5" (geçerli kültürle okumak "7.5"i 75 yapıyordu).
+                        if (DecimalText.TryParse(cellVal, out var sc))
                             cell.Score = sc;
-                        else if (string.IsNullOrEmpty(cellVal))
-                            cell.Score = null;
+                        else
+                            unreadable++;
                     }
                     updateCount++;
                 }
             }
 
-            SuccessMessage = $"✓ Panodan {updateCount} hücre güncellendi. Kaydetmeyi unutmayın!";
+            SuccessMessage = $"✓ Panodan {updateCount} hücre güncellendi. Kaydetmeyi unutmayın!" +
+                             (unreadable > 0 ? $" {unreadable} puan okunamadığı için değiştirilmedi." : "");
             ErrorMessage = null;
         }
         catch (Exception ex)
@@ -180,6 +184,7 @@ public partial class AnswerEntryViewModel : ObservableObject
             var ws = wb.Worksheets.First();
 
             int updateCount = 0;
+            int unreadable = 0;
             int rowIdx = 2; // 1. satır başlık
 
             while (!ws.Cell(rowIdx, 1).IsEmpty())
@@ -214,13 +219,10 @@ public partial class AnswerEntryViewModel : ObservableObject
                     }
                     else
                     {
-                        if (decimal.TryParse(cellVal, System.Globalization.NumberStyles.Any,
-                                             System.Globalization.CultureInfo.InvariantCulture, out var sc))
+                        if (TryReadScoreCell(excelCell, out var sc))
                             cell.Score = sc;
-                        else if (decimal.TryParse(cellVal, out var sc2))
-                            cell.Score = sc2;
-                        else if (string.IsNullOrEmpty(cellVal))
-                            cell.Score = null;
+                        else
+                            unreadable++;
                     }
                     updateCount++;
                 }
@@ -228,7 +230,8 @@ public partial class AnswerEntryViewModel : ObservableObject
                 rowIdx++;
             }
 
-            SuccessMessage = $"✓ Excel'den {updateCount} hücre yüklendi. 'Kaydet' ile veritabanına yazın.";
+            SuccessMessage = $"✓ Excel'den {updateCount} hücre yüklendi. 'Kaydet' ile veritabanına yazın." +
+                             (unreadable > 0 ? $" {unreadable} puan okunamadığı için değiştirilmedi." : "");
             ErrorMessage = null;
         }
         catch (Exception ex)
@@ -285,9 +288,11 @@ public partial class AnswerEntryViewModel : ObservableObject
                             var val = cell.SelectedOption == Core.Enums.OptionLetter.Empty ? "" : cell.SelectedOption.ToString();
                             ws.Cell(excelRow, excelCol).Value = val;
                         }
-                        else
+                        else if (cell.Score is decimal score)
                         {
-                            ws.Cell(excelRow, excelCol).Value = cell.Score?.ToString() ?? "";
+                            // Puan sayı hücresi olarak yazılır: Excel bölge ayarına göre gösterir, geri yüklerken
+                            // metin yorumuna gerek kalmaz (metin "26,00" yazılıp geri 2600 okunuyordu).
+                            ws.Cell(excelRow, excelCol).Value = (double)score;
                         }
                     }
                 }
@@ -305,6 +310,25 @@ public partial class AnswerEntryViewModel : ObservableObject
             ErrorMessage = $"İndirme hatası: {ex.Message}";
             SuccessMessage = null;
         }
+    }
+
+    /// <summary>
+    /// Excel hücresindeki klasik puanı okur. Sayı hücresi doğrudan okunur; metin hücresinde virgül de nokta da
+    /// ondalık ayırıcıdır. Boş hücre: puan yok (null). Okunamayan metin: false.
+    /// </summary>
+    internal static bool TryReadScoreCell(IXLCell cell, out decimal? score)
+    {
+        score = null;
+        if (cell.IsEmpty())
+            return true;
+
+        if (cell.DataType == XLDataType.Number)
+        {
+            score = Math.Round((decimal)cell.GetDouble(), DecimalText.Decimals, MidpointRounding.AwayFromZero);
+            return true;
+        }
+
+        return DecimalText.TryParse(cell.GetString(), out score);
     }
 
     public AnswerEntryViewModel(IAnswerEntryService service)
@@ -397,6 +421,22 @@ public partial class AnswerEntryViewModel : ObservableObject
     {
         ErrorMessage = null;
         SuccessMessage = null;
+
+        // Klasik puan sorunun bu sınavdaki puanını aşamaz (ör. 30 puanlık soruya 75).
+        var questionNumbers = Questions.ToDictionary(q => q.QuestionId, q => q.QuestionNumber);
+        var outOfRange = StudentRows
+            .SelectMany(r => r.Cells
+                .Where(c => c.Type == Core.Enums.QuestionType.OpenEnded
+                            && c.Score is decimal s && (s < 0 || s > c.MaxPoints))
+                .Select(c => $"{r.FullName}, soru {questionNumbers.GetValueOrDefault(c.QuestionId)}: " +
+                             $"{DecimalText.Format(c.Score)} / {DecimalText.Format(c.MaxPoints)}"))
+            .ToList();
+        if (outOfRange.Count > 0)
+        {
+            ErrorMessage = $"{outOfRange.Count} klasik puan sorunun puanını aşıyor ({string.Join("; ", outOfRange.Take(5))}" +
+                           (outOfRange.Count > 5 ? " …" : "") + "). Düzeltip yeniden kaydedin.";
+            return;
+        }
 
         // Silinecek veriler: satırı tamamen boşaltılan öğrencilerin eski cevapları ve puanı elle
         // değiştirilen klasik soruların rubrik dökümü. Kaydetmeden önce öğretmene sorulur.

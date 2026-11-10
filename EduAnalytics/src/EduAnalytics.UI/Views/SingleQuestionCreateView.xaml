@@ -164,7 +164,7 @@
                                                    VerticalAlignment="Center"
                                                    FontWeight="SemiBold"/>
                                         <TextBox Grid.Column="6"
-                                                 Text="{Binding MaxPoints, UpdateSourceTrigger=PropertyChanged}"
+                                                 Text="{Binding MaxPoints, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource DecimalInput}}"
                                                  Width="80"
                                                  VerticalAlignment="Center"/>
                                     </Grid>

@@ -16,6 +16,8 @@ public interface IAnswerEntryService
     /// <item>Satırı tamamen boş olan öğrenci sınava girmemiş sayılır; daha önce kaydedilmiş cevapları silinir.</item>
     /// <item>Klasik soruda puan girilmemişse soru o öğrenci için değerlendirilmemiş sayılır.</item>
     /// <item>Klasik puan değiştiyse ve artık rubrik kriter toplamıyla uyuşmuyorsa kriter dökümü silinir.</item>
+    /// <item>Klasik puan 0 ile sorunun sınavdaki puanı arasında olmalı; değilse <see cref="ArgumentException"/>
+    /// atılır ve hiçbir şey kaydedilmez.</item>
     /// </list>
     /// </summary>
     /// <param name="attendedStudentIds">

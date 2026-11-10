@@ -60,7 +60,7 @@
                             </ComboBox>
 
                             <TextBlock Grid.Row="0" Grid.Column="2" Text="Puan" Style="{StaticResource LabelStyle}"/>
-                            <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding MaxPoints, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding MaxPoints, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource DecimalInput}}"/>
                         </Grid>
 
                         <TextBlock Text="Soru Metni" Style="{StaticResource LabelStyle}"/>
@@ -171,7 +171,7 @@
                                                  Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"
                                                  ToolTip="Ölçüt başlığı (ör. Kavram doğruluğu)"/>
                                         <TextBox Grid.Column="2"
-                                                 Text="{Binding MaxPoints, UpdateSourceTrigger=PropertyChanged}"
+                                                 Text="{Binding MaxPoints, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource DecimalInput}}"
                                                  TextAlignment="Center"
                                                  ToolTip="Bu ölçütten alınabilecek en yüksek puan"/>
                                         <Button Grid.Column="4"

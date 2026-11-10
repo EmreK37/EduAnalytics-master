@@ -43,14 +43,14 @@ public class ItemAnalysisDto
     public string TypeLabel => IsOpenEnded ? "Klasik" : "Test";
 
     public string AverageScoreDisplay => AverageScore is double avg
-        ? $"{avg.ToString("0.##", CultureInfo.InvariantCulture)} / {MaxPoints.ToString("0.##", CultureInfo.InvariantCulture)}"
+        ? $"{avg.ToString("0.##", CultureInfo.CurrentCulture)} / {MaxPoints.ToString("0.##", CultureInfo.CurrentCulture)}"
         : "—";
 
-    public string EmptyCountDisplay => IsOpenEnded ? "—" : EmptyCount.ToString(CultureInfo.InvariantCulture);
+    public string EmptyCountDisplay => IsOpenEnded ? "—" : EmptyCount.ToString(CultureInfo.CurrentCulture);
 
     public string DistractorEffectivenessDisplay => IsOpenEnded
         ? "—"
-        : DistractorEffectivenessIndex.ToString("N2", CultureInfo.InvariantCulture);
+        : DistractorEffectivenessIndex.ToString("N2", CultureInfo.CurrentCulture);
 
     // ─── Zorluk indeksi (p) ───
     /// <summary>p = doğru / toplam.  0..1 arası, 0=çok zor, 1=çok kolay.</summary>

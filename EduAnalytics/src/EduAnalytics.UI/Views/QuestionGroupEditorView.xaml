@@ -235,7 +235,7 @@
                                                 </ComboBox>
 
                                                 <TextBox Grid.Column="4"
-                                                         Text="{Binding MaxPoints, UpdateSourceTrigger=PropertyChanged}"
+                                                         Text="{Binding MaxPoints, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource DecimalInput}}"
                                                          Width="80"/>
 
                                                 <Button Grid.Column="6"

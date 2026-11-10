@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Windows;
+using System.Windows.Markup;
 using System.Windows.Threading;
 using System.Net.Http;
 using System.IO;
@@ -27,6 +29,17 @@ public partial class App : Application
 
     static App()
     {
+        // Bağlamalar (ör. {0:N2}) sayıları ve tarihleri kod içindeki biçimlendirmeyle aynı bölge ayarıyla yazsın.
+        // Ayar yapılmazsa WPF her zaman en-US kullanır; aynı ekranda hem "0,383" hem "0.50" görünür.
+        // Language miras alınan bir özellik; Run gibi içerik öğeleri dili üst öğeden alır.
+        var language = XmlLanguage.GetLanguage(CultureInfo.CurrentCulture.IetfLanguageTag);
+        FrameworkElement.LanguageProperty.OverrideMetadata(typeof(FrameworkElement), new FrameworkPropertyMetadata(language));
+
+        // Kutuya yazılan metin, bağlama kaynağı güncellenirken yeniden biçimlenip yazanın elinden alınmasın
+        // ("7," yazarken virgül kaybolmasın, "7,05" yazarken "7,0" 7'ye dönüşmesin). Kaynak değişince
+        // (yükleme, temizleme) kutu yine güncellenir.
+        FrameworkCompatibilityPreferences.KeepTextBoxDisplaySynchronizedWithTextProperty = false;
+
         // Örtük (implicit) Window stili türetilmiş pencerelere uygulanmadığı için yazı tipini
         // her pencere yüklenirken köke yazıyoruz; FontFamily ağaçta miras alındığından tüm
         // içerik (yan menü, tablolar, diyaloglar) aynı fontu kullanır.

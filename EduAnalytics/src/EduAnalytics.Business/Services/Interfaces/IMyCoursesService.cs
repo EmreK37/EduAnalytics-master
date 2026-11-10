@@ -36,8 +36,8 @@ public class StudentExamResultDto
     public decimal MaxScore { get; set; }
 
     public string ScoreDisplay => MaxScore > 0
-        ? $"{Score.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} / {MaxScore.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}"
-        : Score.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        ? $"{Score.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture)} / {MaxScore.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture)}"
+        : Score.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture);
 }
 
 public interface IMyCoursesService

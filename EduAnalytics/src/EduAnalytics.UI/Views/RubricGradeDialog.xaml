@@ -86,7 +86,7 @@
                                             Orientation="Horizontal"
                                             HorizontalAlignment="Right"
                                             VerticalAlignment="Center">
-                                    <TextBox Text="{Binding Score, UpdateSourceTrigger=PropertyChanged, StringFormat=N1}"
+                                    <TextBox Text="{Binding Score, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource DecimalInput}}"
                                              Width="72"
                                              FontWeight="SemiBold"
                                              FontSize="13"

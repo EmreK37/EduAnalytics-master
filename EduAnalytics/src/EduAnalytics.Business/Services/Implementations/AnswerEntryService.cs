@@ -118,6 +118,21 @@ public class AnswerEntryService : IAnswerEntryService
             .Include(eq => eq.Question)
             .ToDictionaryAsync(eq => eq.QuestionId);
 
+        // Klasik puan 0 ile sorunun bu sınavdaki puanı arasında olmalı. Hiçbir kayda dokunmadan önce
+        // bütün liste denetlenir; geçersiz bir puan varsa hiçbir şey kaydedilmez.
+        foreach (var u in updates)
+        {
+            if (u.Score is not decimal score
+                || !examQuestions.TryGetValue(u.QuestionId, out var target)
+                || target.Question.Type != QuestionType.OpenEnded)
+                continue;
+
+            var limit = target.OverrideMaxPoints ?? target.Question.MaxPoints;
+            if (score < 0 || score > limit)
+                throw new ArgumentException(
+                    $"Soru {target.OrderInExam}: {score:0.##} puan geçersiz; puan 0 ile {limit:0.##} arasında olmalı.");
+        }
+
         var qIds = examQuestions.Keys.ToList();
         var studentIds = updates.Select(u => u.StudentId).Distinct().ToList();
 

@@ -28,6 +28,7 @@
             <!--   CONVERTERS                                          -->
             <!-- ═══════════════════════════════════════════════════ -->
             <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+            <conv:DecimalInputConverter x:Key="DecimalInput"/>
             <conv:LevelToBrushConverter x:Key="LevelToBrush"/>
             <conv:EnumEqualsConverter x:Key="EnumEquals"/>
             <conv:StringEqualsMultiConverter x:Key="StringEqualsMulti"/>

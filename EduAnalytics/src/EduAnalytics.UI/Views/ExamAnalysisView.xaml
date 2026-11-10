@@ -1087,7 +1087,7 @@
                                                    VerticalAlignment="Center"
                                                    FontWeight="SemiBold"/>
                                         <TextBox Width="80"
-                                                 Text="{Binding AcceptabilityIndex, UpdateSourceTrigger=LostFocus}"
+                                                 Text="{Binding AcceptabilityIndex, UpdateSourceTrigger=LostFocus, Converter={StaticResource DecimalInput}}"
                                                  Margin="12,0,0,0"/>
                                         <TextBlock Text="Geçme Notu:"
                                                    VerticalAlignment="Center"

@@ -36,7 +36,7 @@ public class ProgramOutcomeReportDto
     public bool HasData { get; set; }
 
     public string OverallSuccessDisplay => HasData
-        ? "%" + OverallSuccessRate.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)
+        ? "%" + OverallSuccessRate.ToString("0.#", System.Globalization.CultureInfo.CurrentCulture)
         : "veri yok";
 
     public int TotalQuestionCount { get; set; }
@@ -66,7 +66,7 @@ public class LinkedLearningOutcomeDto
     public double SuccessRate { get; set; }
 
     public string SuccessDisplay => HasData
-        ? "%" + SuccessRate.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)
+        ? "%" + SuccessRate.ToString("0.#", System.Globalization.CultureInfo.CurrentCulture)
         : "veri yok";
 }
 

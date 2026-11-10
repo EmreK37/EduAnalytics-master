@@ -118,6 +118,28 @@ public class AnswerEntryServiceTests
     }
 
     [Fact]
+    public async Task Classic_score_above_the_exam_points_is_rejected_and_nothing_is_saved()
+    {
+        // Örnek: 30 puanlık soruya "7,5" yazılıp yanlışlıkla 75 okunması.
+        var b = new TestExamBuilder();
+        var q1 = b.AddMultipleChoice(10);
+        var q2 = b.AddClassic(30);
+        var q3 = b.AddClassic(10, overrideMax: 20);   // bu sınavda 20 puan
+        b.AddStudent(1);
+        await b.SaveAsync();
+        var service = Service(b);
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => service.SaveAsync(TestExamBuilder.ExamId,
+            new List<StudentAnswerUpdate> { Mc(1, q1, OptionLetter.A), Classic(1, q2, 75) }));
+        Assert.Contains("Soru 2", error.Message);
+        Assert.Equal(0, await b.Db.StudentAnswers.CountAsync());
+
+        // Sınava özgü puan sınırı kullanılır: bankada 10, sınavda 20 puanlık soruya 15 geçerlidir.
+        await service.SaveAsync(TestExamBuilder.ExamId, new List<StudentAnswerUpdate> { Classic(1, q3, 15) });
+        Assert.Equal(15m, (await b.Db.StudentAnswers.SingleAsync()).Score);
+    }
+
+    [Fact]
     public async Task Changing_a_rubric_graded_score_removes_the_stale_breakdown()
     {
         var b = new TestExamBuilder();
