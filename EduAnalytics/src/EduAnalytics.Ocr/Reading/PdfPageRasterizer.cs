@@ -33,13 +33,28 @@ public static class PdfPageRasterizer
         }
 
         var pdfBytes = File.ReadAllBytes(path);
-        foreach (SKBitmap bitmap in Conversion.ToImages(pdfBytes, options: new RenderOptions(Dpi: dpi)))
+        foreach (SKBitmap bitmap in RenderPdf(pdfBytes, dpi))
         {
             using (bitmap)
             {
                 yield return ToGrayMat(bitmap);
             }
         }
+    }
+
+    /// <summary>
+    /// PDFtoImage yalnızca Windows, Linux, macOS ve Android 31+ üzerinde çalışır. Kütüphane platformdan
+    /// bağımsız derlendiği için çağrı bu denetimin içinde yapılır (CA1416).
+    /// </summary>
+    private static IEnumerable<SKBitmap> RenderPdf(byte[] pdfBytes, int dpi)
+    {
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()
+            || OperatingSystem.IsAndroidVersionAtLeast(31))
+        {
+            return Conversion.ToImages(pdfBytes, options: new RenderOptions(Dpi: dpi));
+        }
+
+        throw new PlatformNotSupportedException("PDF sayfaları bu işletim sisteminde görüntüye çevrilemiyor.");
     }
 
     /// <summary>SKBitmap piksellerini doğrudan kopyalayarak gri Mat üretir

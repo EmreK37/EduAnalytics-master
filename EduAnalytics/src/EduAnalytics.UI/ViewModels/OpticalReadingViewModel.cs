@@ -96,6 +96,9 @@ public partial class OpticalReadingViewModel : ObservableObject
     /// </summary>
     public Func<string, bool>? ConfirmSave { get; set; }
 
+    /// <summary>Kaydı durduran "onay bekleyen okuma var" uyarısı; onaylar tamamlanınca kaldırılır.</summary>
+    private string? _pendingApprovalError;
+
     public OpticalReadingViewModel(
         IExamCrudService examCrud,
         IAnswerEntryService answerEntry,
@@ -523,6 +526,16 @@ public partial class OpticalReadingViewModel : ObservableObject
 
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // Kayıt "onay bekleyen okuma var" diye durdurulduysa, son onay da verilince bu uyarı kaldırılır.
+        if (e.PropertyName == nameof(ScannedSheetRowViewModel.HasPendingApprovals)
+            && _pendingApprovalError != null
+            && ErrorMessage == _pendingApprovalError
+            && !Sheets.Any(s => s.HasPendingApprovals))
+        {
+            ErrorMessage = null;
+            _pendingApprovalError = null;
+        }
+
         if (sender is ScannedSheetRowViewModel row &&
             e.PropertyName is nameof(ScannedSheetRowViewModel.AnswersText)
                 or nameof(ScannedSheetRowViewModel.BookletCode)
@@ -977,7 +990,7 @@ public partial class OpticalReadingViewModel : ObservableObject
         if (pending.Count > 0)
         {
             var pendingReadings = pending.Sum(r => r.PendingApprovalCount);
-            ErrorMessage = $"{pending.Count} kâğıtta onay bekleyen {pendingReadings} okuma var: " +
+            ErrorMessage = _pendingApprovalError = $"{pending.Count} kâğıtta onay bekleyen {pendingReadings} okuma var: " +
                            string.Join(", ", pending.Take(3).Select(r => r.SourceLabel)) +
                            (pending.Count > 3 ? " …" : "") + ". " +
                            "Sarı çerçeveli kutuları taranan görüntüyle karşılaştırın: değer doğruysa \"Onayla\"yı " +
