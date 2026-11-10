@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using EduAnalytics.Business.Dtos;
 using EduAnalytics.Business.Services.Interfaces;
 using EduAnalytics.UI.Services;
+using EduAnalytics.UI.Services.AIAssistant;
 
 namespace EduAnalytics.UI.ViewModels;
 
@@ -15,6 +16,7 @@ public partial class DashboardViewModel : ObservableObject
     private readonly ILearningOutcomePerformanceService _learningOutcomeService;
     private readonly IStudentService _studentService;
     private readonly IUserProfileService _userProfile;
+    private readonly IAISettingsService _aiSettings;
 
     public event Action<int>? OpenAnalysisRequested;
     public event Action<DateTime?>? CalendarRequested;
@@ -51,6 +53,41 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private int? _lastActivityExamId;
 
+    // ─── Sistem durumu (sabit metin değil, gerçek durum) ───
+
+    /// <summary>Öğrencilerin dağıldığı sınıf sayısı (öğrenci kartındaki rozet).</summary>
+    [ObservableProperty]
+    private int _classCount;
+
+    [ObservableProperty]
+    private bool _isDatabaseConnected = true;
+
+    [ObservableProperty]
+    private string _databaseStatusText = "Veritabanı kontrol ediliyor…";
+
+    [ObservableProperty]
+    private bool _isAiConfigured;
+
+    [ObservableProperty]
+    private string _aiStatusText = string.Empty;
+
+    /// <summary>Henüz hiç cevap girilmemiş sınav sayısı.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasExamsAwaitingAnswers))]
+    private int _examsAwaitingAnswers;
+
+    public bool HasExamsAwaitingAnswers => ExamsAwaitingAnswers > 0;
+
+    /// <summary>Cevabı girilmiş, yani analiz edilebilen sınav sayısı ("Analize hazır" kartı).</summary>
+    [ObservableProperty]
+    private int _examsReadyForAnalysis;
+
+    [ObservableProperty]
+    private string _readyCaption = string.Empty;
+
+    [ObservableProperty]
+    private string _pendingExamsText = string.Empty;
+
     public string DisplayUserName =>
         string.IsNullOrWhiteSpace(_userProfile.Current.Username)
             ? "Edu"
@@ -77,7 +114,8 @@ public partial class DashboardViewModel : ObservableObject
         IItemAnalysisService itemAnalysisService,
         ILearningOutcomePerformanceService learningOutcomeService,
         IStudentService studentService,
-        IUserProfileService userProfile)
+        IUserProfileService userProfile,
+        IAISettingsService aiSettings)
     {
         _examAnalysis = examAnalysis;
         _statisticsService = statisticsService;
@@ -85,6 +123,7 @@ public partial class DashboardViewModel : ObservableObject
         _learningOutcomeService = learningOutcomeService;
         _studentService = studentService;
         _userProfile = userProfile;
+        _aiSettings = aiSettings;
     }
 
     public async Task LoadAsync()
@@ -92,6 +131,7 @@ public partial class DashboardViewModel : ObservableObject
         IsLoading = true;
         OnPropertyChanged(nameof(DisplayUserName));
         OnPropertyChanged(nameof(GreetingText));
+        UpdateAiStatus();
         try
         {
             var listTask    = _examAnalysis.GetAllExamSummariesAsync();
@@ -105,11 +145,30 @@ public partial class DashboardViewModel : ObservableObject
             Exams = new ObservableCollection<ExamSummaryDto>(_allExams);
             ApplyExamFilter();
 
-            StudentCount = (await studentsTask).Count;
+            var students = await studentsTask;
+            StudentCount = students.Count;
+            ClassCount = students
+                .Select(s => s.ClassName?.Trim())
+                .Where(c => !string.IsNullOrEmpty(c))
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .Count();
 
-            OverallAverageSuccessRate = Exams.Count > 0
-                ? Math.Round(Exams.Average(e => e.AverageSuccessRate), 1)
+            // Genel başarı yalnızca cevabı girilmiş sınavlardan; cevapsız sınav %0 sayılıp ortalamayı düşürmez.
+            var examsWithAnswers = Exams.Where(e => e.TotalStudents > 0).ToList();
+            OverallAverageSuccessRate = examsWithAnswers.Count > 0
+                ? Math.Round(examsWithAnswers.Average(e => e.AverageSuccessRate), 1)
                 : 0;
+
+            ExamsReadyForAnalysis = examsWithAnswers.Count;
+            ExamsAwaitingAnswers = Exams.Count - examsWithAnswers.Count;
+            ReadyCaption = Exams.Count == 0
+                ? "Henüz sınav yok"
+                : ExamsAwaitingAnswers > 0
+                    ? $"{ExamsAwaitingAnswers} sınav cevap bekliyor"
+                    : "Bütün sınavların cevapları girilmiş";
+            PendingExamsText = ExamsAwaitingAnswers > 0
+                ? $"Cevabı girilmemiş {ExamsAwaitingAnswers} sınav var"
+                : Exams.Count > 0 ? "Bütün sınavların cevapları girilmiş" : "Henüz sınav yok";
 
             var latest = Exams.MaxBy(e => e.ExamDate);
             LastActivityExamDate = latest?.ExamDate.Date;
@@ -117,10 +176,40 @@ public partial class DashboardViewModel : ObservableObject
             LastActivityDate = latest is not null
                 ? latest.ExamDate.ToString("dd MMM yyyy")
                 : "—";
+
+            IsDatabaseConnected = true;
+            DatabaseStatusText = "Veritabanı bağlantısı aktif";
+        }
+        catch (Exception ex)
+        {
+            IsDatabaseConnected = false;
+            DatabaseStatusText = "Veritabanına bağlanılamadı: " + ex.GetBaseException().Message;
+            PendingExamsText = string.Empty;
         }
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Yapay zekâ asistanının seçili sağlayıcısı için API anahtarı girilmiş mi? (Sunucuya bağlanılmaz;
+    /// yalnızca yapılandırma denetlenir.)
+    /// </summary>
+    private void UpdateAiStatus()
+    {
+        try
+        {
+            var provider = _aiSettings.Current.ActiveProvider;
+            IsAiConfigured = !string.IsNullOrWhiteSpace(_aiSettings.GetApiKey(provider));
+            AiStatusText = IsAiConfigured
+                ? $"Yapay zekâ asistanı hazır ({provider})"
+                : "Yapay zekâ asistanı için API anahtarı girilmemiş";
+        }
+        catch
+        {
+            IsAiConfigured = false;
+            AiStatusText = "Yapay zekâ ayarları okunamadı";
         }
     }
 
@@ -159,12 +248,14 @@ public partial class DashboardViewModel : ObservableObject
             exam.PassRate = statistics.PassRate;
         }
 
+        // Sınav analizi ekranıyla aynı kural: ortalamalar yalnızca hesaplanabilen maddelerden alınır.
         var itemAnalysis = await _itemAnalysisService.AnalyzeAsync(exam.ExamId);
-        if (itemAnalysis.Count > 0)
-        {
-            exam.AverageDifficultyIndex = Math.Round(itemAnalysis.Average(i => i.DifficultyIndex), 3);
-            exam.AverageDiscriminationIndex = Math.Round(itemAnalysis.Average(i => i.DiscriminationIndex), 3);
-        }
+        var withData = itemAnalysis.Where(i => i.HasData).ToList();
+        if (withData.Count > 0)
+            exam.AverageDifficultyIndex = Math.Round(withData.Average(i => i.DifficultyIndex), 3);
+        var withDiscrimination = itemAnalysis.Where(i => i.HasDiscrimination).ToList();
+        if (withDiscrimination.Count > 0)
+            exam.AverageDiscriminationIndex = Math.Round(withDiscrimination.Average(i => i.DiscriminationIndex), 3);
 
         var outcomes = await _learningOutcomeService.AnalyzeExamAsync(exam.ExamId);
         var lowestOutcome = outcomes.OrderBy(o => o.SuccessRate).FirstOrDefault();

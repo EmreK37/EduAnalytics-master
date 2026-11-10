@@ -10,6 +10,10 @@ public class ExamSummaryDto
     public DateTime ExamDate { get; set; }
     public string CourseName { get; set; } = null!;
     public int TotalStudents { get; set; }
+
+    /// <summary>Sınava en az bir öğrencinin cevabı girilmiş mi? Girilmediyse analiz yapılamaz.</summary>
+    public bool HasAnswers => TotalStudents > 0;
+
     public int TotalQuestions { get; set; }
     public int MultipleChoiceCount { get; set; }
     public int OpenEndedCount { get; set; }

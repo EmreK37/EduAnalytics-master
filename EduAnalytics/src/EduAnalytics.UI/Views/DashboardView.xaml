@@ -114,7 +114,7 @@
                             <Run Text="İyi çalışmalar," />
                             <Run Text="{Binding DisplayUserName, Mode=OneWay}" Foreground="{DynamicResource PrimaryBrush}" />
                         </TextBlock>
-                        <TextBlock Text="Sınav performansı, güvenlik analizleri ve öğrenci durumu hakkında günlük özet tablonuz."
+                        <TextBlock Text="Sınav performansı, güvenilirlik analizleri ve öğrenci durumu hakkında günlük özet tablonuz."
                                    FontSize="14"
                                    LineHeight="21"
                                    Margin="0,8,0,0"
@@ -141,12 +141,13 @@
                             </Grid>
 
                             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,18,0,0">
-                                <TextBlock Text="{Binding Exams.Count}" Style="{StaticResource DashboardMonoValueStyle}"/>
+                                <TextBlock Text="{Binding ExamsReadyForAnalysis}" Style="{StaticResource DashboardMonoValueStyle}"
+                                           ToolTip="En az bir öğrencinin cevabı girilmiş sınavlar"/>
                                 <TextBlock Text=" Sınav" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource SubtleBrush}" VerticalAlignment="Bottom" Margin="8,0,0,4"/>
                             </StackPanel>
 
                             <Grid Grid.Row="2" Margin="0,18,0,0" VerticalAlignment="Bottom">
-                                <TextBlock Text="Yeni analiz bekleniyor" Style="{StaticResource DashboardCaptionStyle}"/>
+                                <TextBlock Text="{Binding ReadyCaption}" Style="{StaticResource DashboardCaptionStyle}"/>
                             </Grid>
                         </Grid>
                     </Border>
@@ -168,13 +169,15 @@
 
                             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,18,0,0">
                                 <TextBlock Text="{Binding StudentCount}" Style="{StaticResource DashboardMonoValueStyle}"/>
-                                <Border Background="{DynamicResource SuccessSubtleBgBrush}" CornerRadius="8" Padding="6,2" Margin="10,4,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="+2 Yeni" FontSize="12" Foreground="{DynamicResource SuccessEmphasisBrush}" FontWeight="Bold"/>
+                                <Border Background="{DynamicResource SuccessSubtleBgBrush}" CornerRadius="8" Padding="6,2" Margin="10,4,0,0" VerticalAlignment="Center"
+                                        Visibility="{Binding ClassCount, Converter={StaticResource BoolToVisibility}}"
+                                        ToolTip="Öğrencilerin kayıtlı olduğu sınıf (şube) sayısı">
+                                    <TextBlock Text="{Binding ClassCount, StringFormat={}{0} sınıf}" FontSize="12" Foreground="{DynamicResource SuccessEmphasisBrush}" FontWeight="Bold"/>
                                 </Border>
                             </StackPanel>
 
                             <Grid Grid.Row="2" Margin="0,18,0,0" VerticalAlignment="Bottom">
-                                <TextBlock Text="Bu dönem güncel kayıtlar" Style="{StaticResource DashboardCaptionStyle}"/>
+                                <TextBlock Text="Sistemde kayıtlı öğrenciler" Style="{StaticResource DashboardCaptionStyle}"/>
                             </Grid>
                         </Grid>
                     </Border>
@@ -265,10 +268,37 @@
                                                 <TextBlock Text="{Binding ExamTitle}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
                                                 
                                                 <WrapPanel Margin="0,0,0,2">
-                                                    <Border Background="{DynamicResource WarningSubtleBgBrush}" BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="0,0,10,6">
+                                                    <!-- Sınavın durumu: cevabı girildiyse "Analize hazır", girilmediyse "Cevap bekliyor". -->
+                                                    <Border BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="0,0,10,6">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="{DynamicResource SuccessSubtleBgBrush}"/>
+                                                                <Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasAnswers}" Value="False">
+                                                                        <Setter Property="Background" Value="{DynamicResource WarningSubtleBgBrush}"/>
+                                                                        <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
                                                         <StackPanel Orientation="Horizontal">
-                                                            <Ellipse Width="6" Height="6" Fill="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="Analiz Bekliyor" Margin="6,0,0,0" Foreground="{DynamicResource WarningBrush}" FontSize="11" FontWeight="Bold"/>
+                                                            <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                                                     Fill="{Binding BorderBrush, RelativeSource={RelativeSource AncestorType=Border}}"/>
+                                                            <TextBlock Margin="6,0,0,0" FontSize="11" FontWeight="Bold">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Text" Value="Analize hazır"/>
+                                                                        <Setter Property="Foreground" Value="{DynamicResource SuccessEmphasisBrush}"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasAnswers}" Value="False">
+                                                                                <Setter Property="Text" Value="Cevap bekliyor"/>
+                                                                                <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
                                                         </StackPanel>
                                                     </Border>
                                                     <Border Style="{StaticResource DashboardMetaChipStyle}" Margin="0,0,10,6">
@@ -358,20 +388,55 @@
                                 <StackPanel>
                                     <TextBlock Text="Sistem Durumu" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,12"/>
                                     
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Veritabanı bağlantısı aktif" FontSize="12.5" Foreground="{DynamicResource SubtleBrush}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                    
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Yapay Zeka (AI) servisi çevrimiçi" FontSize="12.5" Foreground="{DynamicResource SubtleBrush}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <!-- Durum satırları gerçek durumu gösterir: yeşil iyi, amber dikkat, kırmızı hata. -->
+                                    <DockPanel Margin="0,0,0,10">
+                                        <Ellipse DockPanel.Dock="Left" Width="8" Height="8" VerticalAlignment="Center">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDatabaseConnected}" Value="False">
+                                                            <Setter Property="Fill" Value="{DynamicResource DangerBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+                                        <TextBlock Text="{Binding DatabaseStatusText}" FontSize="12.5" Foreground="{DynamicResource SubtleBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    </DockPanel>
 
-                                    <StackPanel Orientation="Horizontal">
-                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Bekleyen 2 analiz raporu" FontSize="12.5" Foreground="{DynamicResource SubtleBrush}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <DockPanel Margin="0,0,0,10">
+                                        <Ellipse DockPanel.Dock="Left" Width="8" Height="8" VerticalAlignment="Center">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsAiConfigured}" Value="False">
+                                                            <Setter Property="Fill" Value="{DynamicResource WarningBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+                                        <TextBlock Text="{Binding AiStatusText}" FontSize="12.5" Foreground="{DynamicResource SubtleBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                                                   ToolTip="API anahtarı Ayarlar'daki yapay zekâ bölümünden girilir. Anahtarın girilip girilmediği denetlenir; sunucuya bağlanılmaz."/>
+                                    </DockPanel>
+
+                                    <DockPanel Visibility="{Binding PendingExamsText, Converter={StaticResource BoolToVisibility}}">
+                                        <Ellipse DockPanel.Dock="Left" Width="8" Height="8" VerticalAlignment="Center">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasExamsAwaitingAnswers}" Value="True">
+                                                            <Setter Property="Fill" Value="{DynamicResource WarningBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+                                        <TextBlock Text="{Binding PendingExamsText}" FontSize="12.5" Foreground="{DynamicResource SubtleBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    </DockPanel>
                                 </StackPanel>
                             </Border>
 
